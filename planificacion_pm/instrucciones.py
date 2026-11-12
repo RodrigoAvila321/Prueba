@@ -36,6 +36,11 @@ TEXTO = """
 4. Fecha sugerida = vencimiento proyectado − 15 % de los días restantes (redondeado hacia arriba), nunca anterior a hoy. «PROGRAMADA» exige una fecha igual o anterior a la sugerida; si es posterior queda «PROGRAMADA CON RIESGO».
 5. Proyección: parte de la PM actual (fecha programada o proyectada) y suma 250 h por PM al ritmo del avance proyectado, siguiendo el ciclo del modelo.
 
+# E2. Resumen de PM (PDF)
+1. Botón «Resumen de PM (PDF)» en el Panel (Últimas PM) y en Historial. Primero pregunta el turno (Turno A o Turno B) y el período (por defecto los últimos 7 días).
+2. El PDF incluye: puntos clave (PM ejecutadas, equipos, PM a tiempo / adelantadas / atrasadas, aceites cambiados, con atraso y pendientes), resumen por equipo, detalle de cada PM con su desviación en horas y en días, los aceites cambiados con su estado, y espacios de firma.
+3. Desviación de la PM = horómetro real - (horómetro de la PM anterior + intervalo). «A tiempo» = dentro de la tolerancia (± horas) definida en Configuración. Un aceite está atrasado si sus horas acumuladas al cambio superan su frecuencia más la tolerancia.
+
 # F. Proyección de aceites, aceites por semanas y kits
 1. «Proyección aceites»: defina Desde / Hasta (dd-mm-aaaa) y presione «Definir período». El tramo anterior a hoy suma las PM ejecutadas del Historial y el tramo desde hoy, las PM proyectadas. LL-0006 se calcula por días calendario × litros por día.
 2. «Exportar» genera un Excel con Resumen, Por equipo, Mes a mes, PM incluidas y Kits a solicitar.

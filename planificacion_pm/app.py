@@ -12,14 +12,14 @@ from tkinter import filedialog, messagebox, ttk
 
 import openpyxl
 
-from . import TITULO, __version__, exportar, tema
+from . import TITULO, __version__, exportar, resumen_pdf, tema
 from .acciones import Acciones
 from .db import PARAMS_DEF, Repositorio
 from .importar import extraer_hoja, importar_libro
 from .motor import Motor
 from .util import es_num, fmt_fecha, fmt_fechahora, fmt_num, fmt_pct, fmt_tipo, parse_num
 from .widgets import (AZUL, NARANJA, ROJO, VERDE, Desplazable, DialogoFila, DialogoTexto, DialogoVarios,
-                      EditorTabla, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
+                      EditorTabla, DialogoResumen, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
 
 NOMBRE_DB = "PlanificacionPM_datos.db"
 
@@ -425,6 +425,7 @@ class App(tk.Tk):
                                     ("h", "Horómetro", 80, "center"), ("i", "Horas intervalo", 95, "center"),
                                     ("p", "Programada", 90, "center")], height=6)
         m.pack(fill="both", expand=True)
+        self._boton(s6, "Resumen de PM (PDF)", self._resumen_pm, "Naranja").pack(anchor="w", pady=(8, 0))
 
         # KIT + PROYECCIÓN 6 MESES
         s7 = self._seccion(p, "KIT DE MANTENIMIENTO", "kit")
@@ -644,6 +645,30 @@ class App(tk.Tk):
                             f"{fmt_fecha(r['fecha'])} ({fmt_num(r['horo'])} h)\n"
                             f"Aceites cambiados (SI): {r['n_si']} de {r['n_filas']}.", ruta)
 
+    def _resumen_pm(self):
+        hoy = self.m.hoy
+        d = DialogoResumen(self, fmt_fecha(hoy - dt.timedelta(days=6)), fmt_fecha(hoy))
+        if not d.resultado:
+            return
+        t, d1, d2 = d.resultado["turno"], d.resultado["desde"], d.resultado["hasta"]
+        nombre = f"Resumen_PM_{t.replace(' ', '')}_{d1:%d-%m-%Y}_al_{d2:%d-%m-%Y}.pdf"
+        ruta = filedialog.asksaveasfilename(parent=self, title="Guardar resumen de PM", initialfile=nombre,
+                                            initialdir=str(self.ruta_db.parent), defaultextension=".pdf",
+                                            filetypes=[("Documento PDF", "*.pdf")])
+        if not ruta:
+            return
+        if not ruta.lower().endswith(".pdf"):
+            ruta += ".pdf"
+        try:
+            r = resumen_pdf.exportar_resumen_pdf(self.m, d1, d2, t, ruta, self.acc.usuario())
+        except Exception as ex:
+            self._error_export(ex)
+            return
+        k = r["kpi"]
+        self._tras_exportar(f"Resumen de PM ({t}) exportado:\n{ruta}\n\nPeríodo {fmt_fecha(d1)} al {fmt_fecha(d2)}: "
+                            f"{k['n_pm']} PM en {len(k['equipos'])} equipo(s) · {k['aceites']} aceites cambiados · "
+                            f"{k['ac_pend']} pendientes.", ruta)
+
     # -------------------------------------------------------------- HISTORIAL
     COLS_HIST = [("id", "ID", 50, "center"), ("equipo", "Equipo", 60, "center"), ("modelo", "Modelo", 70, "center"),
                  ("faena", "Faena", 55, "center"), ("tipo", "Tipo PM", 65, "center"),
@@ -676,6 +701,7 @@ class App(tk.Tk):
         self._boton(barra, "Corregir fechas futuras", lambda: (self.acc.corregir_fechas_futuras(), self.refrescar()),
                     "Gris").pack(side="left", padx=6)
         self._boton(barra, "Exportar tabla a Excel", self._exportar_hist, "Verde").pack(side="left")
+        self._boton(barra, "Resumen de PM (PDF)", self._resumen_pm, "Naranja").pack(side="left", padx=6)
         self.lbl_nh = ttk.Label(barra, text="", style="Nota.TLabel")
         self.lbl_nh.pack(side="right")
         m, self.tv_h = tabla(tab, self.COLS_HIST, height=25)

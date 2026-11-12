@@ -61,8 +61,8 @@ def importar_libro(ruta: str | Path, repo: Repositorio, incluir_datos: bool = Tr
         # ---------------- parámetros
         params = {}
         for clave, _, defecto in PARAMS_DEF:
-            n = _PARAM_NOMBRES[clave]
-            v = lib.valor(n) if lib.tiene(n) else None
+            n = _PARAM_NOMBRES.get(clave)
+            v = lib.valor(n) if n and lib.tiene(n) else None
             params[clave] = float(v) if es_num(v) else defecto
         params["usuario"] = ""
         repo.set_config("params", params, commit=False)

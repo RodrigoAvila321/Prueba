@@ -50,6 +50,7 @@ PARAMS_DEF = [
     ("margen", "Margen de seguridad compra de aceites", 0.2),
     ("margen_prog", "Margen de seguridad para programar PM (% de los días restantes)", 0.15),
     ("avance_extra", "Avance extra de horómetro proyectado (% sobre el promedio real h/día)", 0.15),
+    ("tol_pm", "Tolerancia «a tiempo» en el resumen de PM (± horas)", 10),
 ]
 
 

@@ -242,6 +242,72 @@ class DialogoTexto(tk.Toplevel):
         self.destroy()
 
 
+class DialogoResumen(tk.Toplevel):
+    """Turno (obligatorio) y período del resumen de PM."""
+
+    def __init__(self, parent, desde: str, hasta: str):
+        super().__init__(parent)
+        self.title(f"{TITULO} · Resumen de PM")
+        self.transient(parent)
+        self.resizable(False, False)
+        self.resultado = None
+        f = tk.Frame(self, background=TARJETA, padx=22, pady=18)
+        f.pack(fill="both")
+        self._img = tema.icono(self, "historial", 22, ACENTO)
+        tk.Label(f, image=self._img, text="  Resumen de PM ejecutadas", compound="left", background=TARJETA,
+                 foreground=NAVY, font=(FUENTE, 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+        tk.Label(f, text="¿A qué turno pertenece este resumen?", background=TARJETA, foreground=TEXTO,
+                 font=(FUENTE, 10, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", pady=(14, 6))
+        self.turno = tk.StringVar(value="")
+        bt = tk.Frame(f, background=TARJETA)
+        bt.grid(row=2, column=0, columnspan=2, sticky="w")
+        self._botones = {}
+        for t in ("Turno A", "Turno B"):
+            b = tk.Label(bt, text=t, width=12, pady=10, cursor="hand2", font=(FUENTE, 11, "bold"),
+                         background="#EEF2F6", foreground=NAVY, highlightthickness=2, highlightbackground=BORDE)
+            b.pack(side="left", padx=(0, 10))
+            b.bind("<Button-1>", lambda _e, t=t: self._elegir(t))
+            self._botones[t] = b
+        tk.Label(f, text="Período (dd-mm-aaaa)", background=TARJETA, foreground=TEXTO, font=(FUENTE, 10, "bold")
+                 ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(16, 6))
+        self.v1, self.v2 = tk.StringVar(value=desde), tk.StringVar(value=hasta)
+        for i, (lbl, v) in enumerate((("Desde", self.v1), ("Hasta", self.v2))):
+            tk.Label(f, text=lbl, background=TARJETA, foreground=SUAVE).grid(row=4 + i, column=0, sticky="w")
+            ttk.Entry(f, textvariable=v, width=14).grid(row=4 + i, column=1, sticky="w", pady=2, padx=(8, 0))
+        tk.Label(f, text="Por defecto: los últimos 7 días (semana del turno).", background=TARJETA,
+                 foreground=SUAVE, font=(FUENTE, 8)).grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        b = tk.Frame(f, background=TARJETA)
+        b.grid(row=7, column=0, columnspan=2, sticky="e", pady=(16, 0))
+        ttk.Button(b, text="Cancelar", style="Gris.TButton", command=self.destroy).pack(side="right")
+        ttk.Button(b, text="Generar PDF", style="Verde.TButton", command=self._ok).pack(side="right", padx=8)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        _centrar(self, parent)
+        self.grab_set()
+        self.wait_window()
+
+    def _elegir(self, t):
+        self.turno.set(t)
+        for k, b in self._botones.items():
+            sel = k == t
+            b.configure(background=ACENTO if sel else "#EEF2F6", foreground="#FFFFFF" if sel else NAVY,
+                        highlightbackground=ACENTO if sel else BORDE)
+
+    def _ok(self):
+        from .util import parse_fecha
+        if not self.turno.get():
+            messagebox.showwarning(TITULO, "Seleccione el turno (Turno A o Turno B).", parent=self)
+            return
+        d1, d2 = parse_fecha(self.v1.get()), parse_fecha(self.v2.get())
+        if d1 is None or d2 is None:
+            messagebox.showwarning(TITULO, "Ingrese fechas válidas con formato dd-mm-aaaa.", parent=self)
+            return
+        if d2 < d1:
+            messagebox.showwarning(TITULO, "La fecha «Hasta» debe ser igual o posterior a «Desde».", parent=self)
+            return
+        self.resultado = dict(turno=self.turno.get(), desde=d1, hasta=d2)
+        self.destroy()
+
+
 class DialogoVarios(tk.Toplevel):
     """Lista de casillas para elegir uno o varios elementos."""
 
