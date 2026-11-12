@@ -12,14 +12,14 @@ from tkinter import filedialog, messagebox, ttk
 
 import openpyxl
 
-from . import TITULO, __version__, exportar
+from . import TITULO, __version__, exportar, tema
 from .acciones import Acciones
 from .db import PARAMS_DEF, Repositorio
 from .importar import extraer_hoja, importar_libro
 from .motor import Motor
 from .util import es_num, fmt_fecha, fmt_fechahora, fmt_num, fmt_pct, fmt_tipo, parse_num
 from .widgets import (AZUL, NARANJA, ROJO, VERDE, Desplazable, DialogoFila, DialogoTexto, DialogoVarios,
-                      EditorTabla, Tarjeta, llenar, tabla)
+                      EditorTabla, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
 
 NOMBRE_DB = "PlanificacionPM_datos.db"
 
@@ -125,42 +125,25 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ estilo
     def _estilos(self):
-        s = ttk.Style(self)
+        tema.aplicar(self)
         try:
-            s.theme_use("clam")
+            self._logo = tema.icono(self, "logo", 64)
+            self.iconphoto(True, self._logo)
         except tk.TclError:
             pass
-        base = ("Segoe UI", 9)
-        self.option_add("*Font", base)
-        s.configure(".", font=base)
-        self.configure(background="#FFFFFF")
-        self.option_add("*Toplevel.background", "#FFFFFF")
-        for est in ("TFrame", "TLabel", "TLabelframe", "TLabelframe.Label", "TCheckbutton", "TNotebook"):
-            s.configure(est, background="#FFFFFF")
-        s.configure("Fondo.TFrame", background="#FFFFFF")
-        s.configure("Tarjeta.TFrame", background="#F2F2F2", relief="flat")
-        s.configure("TarjetaTit.TLabel", background="#F2F2F2", foreground="#595959", font=("Segoe UI", 8))
-        s.configure("TarjetaVal.TLabel", background="#F2F2F2", foreground=AZUL, font=("Segoe UI", 11, "bold"))
-        s.configure("Seccion.TLabelframe", background="#FFFFFF")
-        s.configure("Seccion.TLabelframe.Label", foreground=AZUL, background="#FFFFFF", font=("Segoe UI", 10, "bold"))
-        s.configure("Titulo.TLabel", foreground=AZUL, font=("Segoe UI", 14, "bold"))
-        s.configure("Nota.TLabel", foreground="#595959")
-        s.configure("Alerta.TLabel", foreground=ROJO, font=("Segoe UI", 10, "bold"))
-        s.configure("Accion.TButton", font=("Segoe UI", 9, "bold"))
-        s.configure("Treeview", rowheight=22)
-        s.configure("Treeview.Heading", background=AZUL, foreground="#FFFFFF", font=("Segoe UI", 9, "bold"))
-        s.map("Treeview.Heading", background=[("active", "#2E75B6")])
-        for nombre, color in (("Verde", VERDE), ("Rojo", ROJO), ("Azul", "#2E75B6"), ("Naranja", NARANJA),
-                              ("Gris", "#767676"), ("Morado", "#7030A0")):
-            s.configure(f"{nombre}.TButton", background=color, foreground="#FFFFFF", font=("Segoe UI", 9, "bold"),
-                        padding=(10, 5))
-            s.map(f"{nombre}.TButton", background=[("active", color), ("pressed", AZUL)])
 
     def _boton(self, parent, texto, cmd, color="Azul", **kw):
         return ttk.Button(parent, text=texto, command=cmd, style=f"{color}.TButton", **kw)
 
-    def _seccion(self, parent, titulo):
-        return ttk.LabelFrame(parent, text=titulo, style="Seccion.TLabelframe", padding=8)
+    ICONOS_SECCION = (("PERÍODO", "calendario"), ("PLAZO", "calendario"), ("SEMANA", "calendario"),
+                      ("COMPRA", "litros"), ("ACEITES DEL", "litros"), ("MODELO DE FLOTA", "litros"),
+                      ("AÑO", "proyeccion"), ("POR EQUIPO", "camion"), ("KITS", "kit"), ("REPUESTOS", "herramientas"),
+                      ("Parámetros", "config"), ("Tablas", "config"), ("Datos", "historial"))
+
+    def _seccion(self, parent, titulo, icono=None):
+        if icono is None:
+            icono = next((ic for clave, ic in self.ICONOS_SECCION if clave in titulo), "herramientas")
+        return Seccion(parent, titulo, icono)
 
     # ------------------------------------------------------------ primer inicio
     def _primer_inicio(self) -> bool:
@@ -206,37 +189,132 @@ class App(tk.Tk):
         self.refrescar()
 
     # ---------------------------------------------------------------- armado
-    def _construir(self):
-        top = ttk.Frame(self, padding=(10, 8))
-        top.pack(fill="x")
-        ttk.Label(top, text="PLANIFICACIÓN DE MANTENCIÓN PREVENTIVA · EQUIPOS DE PERFORACIÓN",
-                  style="Titulo.TLabel").grid(row=0, column=0, columnspan=10, sticky="w")
-        ttk.Label(top, text="EQUIPO").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        self.cb_eq = ttk.Combobox(top, textvariable=self.var_eq, values=self.m.lista_equipos(), width=8,
-                                  state="readonly", font=("Segoe UI", 12, "bold"))
-        self.cb_eq.grid(row=1, column=1, padx=(4, 16), pady=(6, 0))
-        self.cb_eq.bind("<<ComboboxSelected>>", lambda _e: self._cambio_equipo())
-        self.lbl_modelo = ttk.Label(top, text="", font=("Segoe UI", 10, "bold"))
-        self.lbl_modelo.grid(row=1, column=2, padx=(0, 16), pady=(6, 0))
-        self.lbl_horo = ttk.Label(top, text="", font=("Segoe UI", 10))
-        self.lbl_horo.grid(row=1, column=3, padx=(0, 10), pady=(6, 0))
-        self._boton(top, "Actualizar horómetro", self._actualizar_horo).grid(row=1, column=4, pady=(6, 0))
-        self.lbl_alerta = ttk.Label(top, text="", style="Alerta.TLabel")
-        self.lbl_alerta.grid(row=1, column=5, padx=12, pady=(6, 0), sticky="w")
+    PAGINAS = (("Panel", "panel", "Panel del equipo"), ("Historial", "historial", "Historial de PM"),
+               ("Aceites", "aceite", "Cambios de aceite"), ("Proyección", "proyeccion", "Proyección de PM"),
+               ("Proyección aceites", "litros", "Compra de aceites"), ("Aceites por semanas", "calendario", "Aceites por semanas"),
+               ("Kits a solicitar", "kit", "Kits a solicitar"), ("Kits PM", "herramientas", "Kits PM"),
+               ("Lecturas y programación", "reloj", "Lecturas y programación"),
+               ("Configuración", "config", "Configuración"), ("Instrucciones", "ayuda", "Ayuda"))
+    DESPLAZABLES = ("Panel", "Proyección aceites", "Aceites por semanas", "Kits a solicitar", "Configuración")
 
-        self.nb = ttk.Notebook(self)
-        self.nb.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+    def _construir(self):
+        # ---- barra lateral
+        lat = tk.Frame(self, background=tema.NAVY, width=226)
+        lat.pack(side="left", fill="y")
+        lat.pack_propagate(False)
+        marca = tk.Frame(lat, background=tema.NAVY)
+        marca.pack(fill="x", padx=16, pady=(18, 6))
+        self._logo_lat = tema.icono(self, "logo", 44)
+        tk.Label(marca, image=self._logo_lat, background=tema.NAVY).pack(side="left")
+        tk.Label(marca, text="Mantención\nPreventiva", justify="left", background=tema.NAVY, foreground="#FFFFFF",
+                 font=(tema.FUENTE, 13, "bold")).pack(side="left", padx=10)
+        tk.Label(lat, text="EQUIPOS DE PERFORACIÓN", background=tema.NAVY, foreground=tema.ACENTO,
+                 font=(tema.FUENTE, 8, "bold")).pack(anchor="w", padx=18, pady=(0, 6))
+        FranjaSeguridad(lat, 6).pack(fill="x", pady=(4, 12))
+        self._items = {}
+        for nombre, ic, etiqueta in self.PAGINAS:
+            self._items[nombre] = self._item_lateral(lat, nombre, ic, etiqueta)
+        tk.Label(lat, text=f"v{__version__}  ·  datos locales", background=tema.NAVY, foreground="#7F8DA3",
+                 font=(tema.FUENTE, 8)).pack(side="bottom", anchor="w", padx=18, pady=12)
+
+        # ---- zona principal
+        cuerpo = ttk.Frame(self, style="Pagina.TFrame")
+        cuerpo.pack(side="left", fill="both", expand=True)
+        cab = tk.Frame(cuerpo, background=tema.TARJETA)
+        cab.pack(fill="x")
+        izq = tk.Frame(cab, background=tema.TARJETA)
+        izq.pack(side="left", padx=18, pady=10)
+        self.lbl_pagina = tk.Label(izq, text="", background=tema.TARJETA, foreground=tema.NAVY,
+                                   font=(tema.FUENTE, 16, "bold"))
+        self.lbl_pagina.pack(anchor="w")
+        tk.Label(izq, text="Planificación de mantención preventiva · equipos de perforación", background=tema.TARJETA,
+                 foreground=tema.SUAVE, font=(tema.FUENTE, 9)).pack(anchor="w")
+        der = tk.Frame(cab, background=tema.TARJETA)
+        der.pack(side="right", padx=18, pady=10)
+        caja = tk.Frame(der, background="#F1F4F8", padx=10, pady=4)
+        caja.pack(side="left", padx=(0, 10))
+        self._ic_camion = tema.icono(self, "camion", 22, tema.NAVY)
+        tk.Label(caja, image=self._ic_camion, background="#F1F4F8").pack(side="left", padx=(0, 6))
+        tk.Label(caja, text="EQUIPO", background="#F1F4F8", foreground=tema.SUAVE, font=(tema.FUENTE, 8, "bold")
+                 ).pack(side="left", padx=(0, 6))
+        self.cb_eq = ttk.Combobox(caja, textvariable=self.var_eq, values=self.m.lista_equipos(), width=6,
+                                  state="readonly", font=(tema.FUENTE, 14, "bold"))
+        self.cb_eq.pack(side="left")
+        self.cb_eq.bind("<<ComboboxSelected>>", lambda _e: self._cambio_equipo())
+        info = tk.Frame(der, background=tema.TARJETA)
+        info.pack(side="left", padx=(4, 14))
+        self.lbl_modelo = tk.Label(info, text="", background=tema.TARJETA, foreground=tema.NAVY,
+                                   font=(tema.FUENTE, 10, "bold"))
+        self.lbl_modelo.pack(anchor="w")
+        self.lbl_horo = tk.Label(info, text="", background=tema.TARJETA, foreground=tema.SUAVE, font=(tema.FUENTE, 9))
+        self.lbl_horo.pack(anchor="w")
+        self._boton(der, "⟳  Actualizar horómetro", self._actualizar_horo, "Naranja").pack(side="left")
+        FranjaSeguridad(cuerpo, 7).pack(fill="x")
+        self.lbl_alerta = tk.Label(cuerpo, text="", background="#FDECEC", foreground="#A12A2A",
+                                   font=(tema.FUENTE, 10, "bold"), anchor="w", padx=18, pady=6)
+
+        self.nb = ttk.Notebook(cuerpo, style="Oculto.TNotebook")
+        self.nb.pack(fill="both", expand=True)
         self.tabs = {}
-        for nombre, fn in (("Panel", self._tab_panel), ("Historial", self._tab_historial),
-                           ("Aceites", self._tab_aceites), ("Proyección", self._tab_proyeccion),
-                           ("Proyección aceites", self._tab_proy_aceites),
-                           ("Aceites por semanas", self._tab_semanas), ("Kits a solicitar", self._tab_kits_sol),
-                           ("Kits PM", self._tab_kits_pm), ("Lecturas y programación", self._tab_lecturas),
-                           ("Configuración", self._tab_config), ("Instrucciones", self._tab_instrucciones)):
-            f = ttk.Frame(self.nb, padding=6)
+        fns = {"Panel": self._tab_panel, "Historial": self._tab_historial, "Aceites": self._tab_aceites,
+               "Proyección": self._tab_proyeccion, "Proyección aceites": self._tab_proy_aceites,
+               "Aceites por semanas": self._tab_semanas, "Kits a solicitar": self._tab_kits_sol,
+               "Kits PM": self._tab_kits_pm, "Lecturas y programación": self._tab_lecturas,
+               "Configuración": self._tab_config, "Instrucciones": self._tab_instrucciones}
+        for nombre, _ic, _et in self.PAGINAS:
+            f = ttk.Frame(self.nb, style="Pagina.TFrame")
             self.nb.add(f, text=nombre)
             self.tabs[nombre] = f
-            fn(f)
+            if nombre in self.DESPLAZABLES:
+                fns[nombre](f)
+            else:
+                tarjeta = ttk.Frame(f, style="Card.TFrame", padding=16)
+                tarjeta.pack(fill="both", expand=True, padx=12, pady=12)
+                fns[nombre](tarjeta)
+        self.nb.bind("<<NotebookTabChanged>>", lambda _e: self._marcar_lateral())
+        self._marcar_lateral()
+
+    def _item_lateral(self, lat, nombre, ic, etiqueta):
+        fila = tk.Frame(lat, background=tema.NAVY, cursor="hand2")
+        fila.pack(fill="x")
+        franja = tk.Frame(fila, width=4, background=tema.NAVY)
+        franja.pack(side="left", fill="y")
+        img_n = tema.icono(self, ic, 18, "#9FB0C6")
+        img_a = tema.icono(self, ic, 18, tema.ACENTO)
+        li = tk.Label(fila, image=img_n, background=tema.NAVY)
+        li.pack(side="left", padx=(14, 10), pady=9)
+        lt = tk.Label(fila, text=etiqueta, background=tema.NAVY, foreground="#C5D0DE", font=(tema.FUENTE, 10),
+                      anchor="w")
+        lt.pack(side="left", fill="x", expand=True)
+        item = dict(fila=fila, franja=franja, li=li, lt=lt, img_n=img_n, img_a=img_a, etiqueta=etiqueta)
+
+        def ir(_e=None):
+            self.nb.select(self.tabs[nombre])
+
+        def sobre(on):
+            if self.nb.select() != str(self.tabs[nombre]):
+                bg = tema.NAVY_HOVER if on else tema.NAVY
+                for w in (fila, li, lt):
+                    w.configure(background=bg)
+        for w in (fila, li, lt):
+            w.bind("<Button-1>", ir)
+            w.bind("<Enter>", lambda _e: sobre(True))
+            w.bind("<Leave>", lambda _e: sobre(False))
+        return item
+
+    def _marcar_lateral(self):
+        actual = self.nb.select()
+        for nombre, it in self._items.items():
+            activo = actual == str(self.tabs[nombre])
+            bg = tema.NAVY2 if activo else tema.NAVY
+            for w in (it["fila"], it["li"], it["lt"]):
+                w.configure(background=bg)
+            it["franja"].configure(background=tema.ACENTO if activo else tema.NAVY)
+            it["li"].configure(image=it["img_a"] if activo else it["img_n"])
+            it["lt"].configure(foreground="#FFFFFF" if activo else "#C5D0DE",
+                               font=(tema.FUENTE, 10, "bold" if activo else "normal"))
+            if activo:
+                self.lbl_pagina.configure(text=it["etiqueta"])
 
     # ---------------------------------------------------------------- PANEL
     def _tab_panel(self, tab):
@@ -244,29 +322,33 @@ class App(tk.Tk):
         d.pack(fill="both", expand=True)
         p = d.interior
         # PM ACTUAL
-        s1 = self._seccion(p, "PM ACTUAL")
+        s1 = self._seccion(p, "PM ACTUAL", "herramientas")
         s1.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         self.t = {}
+        self.medidor = Medidor(s1, 176)
+        self.medidor.grid(row=0, column=0, rowspan=3, padx=(0, 10), sticky="n")
         for i, (k, tit) in enumerate((("pm", "PM actual (pendiente)"), ("est_prog", "Estado de programación"),
                                       ("obj", "Horómetro objetivo"), ("venc", "Vencimiento proyectado"),
                                       ("fprog", "Fecha programada"), ("cumpl", "Cumplimiento última PM"),
                                       ("fsug", "Fecha sugerida para programar"))):
-            t = Tarjeta(s1, tit)
-            t.grid(row=i // 3, column=i % 3, sticky="nsew", padx=3, pady=3)
+            t = Tarjeta(s1, tit, 15)
+            t.grid(row=i // 3, column=1 + i % 3, sticky="nsew", padx=3, pady=3)
             self.t[k] = t
-        self.lbl_detalle = ttk.Label(s1, text="", wraplength=430, style="Nota.TLabel")
-        self.lbl_detalle.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 6))
+        for c in range(1, 4):
+            s1.columnconfigure(c, weight=1, uniform="pm")
+        self.lbl_detalle = ttk.Label(s1, text="", wraplength=560, style="Nota.TLabel")
+        self.lbl_detalle.grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 6))
         fp = ttk.Frame(s1)
-        fp.grid(row=4, column=0, columnspan=3, sticky="w")
+        fp.grid(row=4, column=0, columnspan=4, sticky="w")
         ttk.Label(fp, text="Asignar fecha programada (dd-mm-aaaa):").pack(side="left")
         self.var_fprog = tk.StringVar()
         ttk.Entry(fp, textvariable=self.var_fprog, width=12).pack(side="left", padx=6)
         self._boton(fp, "Programar PM", self._programar).pack(side="left")
         self.lbl_nota_prog = ttk.Label(s1, text="", style="Nota.TLabel", wraplength=430)
-        self.lbl_nota_prog.grid(row=5, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self.lbl_nota_prog.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
         # ESTADO DE MANTENCIÓN
-        s2 = self._seccion(p, "ESTADO DE MANTENCIÓN")
+        s2 = self._seccion(p, "ESTADO DE MANTENCIÓN", "panel")
         s2.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
         for i, (k, tit) in enumerate((("ult", "Última PM ejecutada"), ("ult_horo", "Horómetro última PM"),
                                       ("ult_fecha", "Fecha última PM"), ("prom", "Promedio real (h/día)"),
@@ -275,25 +357,24 @@ class App(tk.Tk):
                                       ("post_horo", "Horómetro próxima PM"), ("post_fecha", "Fecha estimada"),
                                       ("semana", "Semana actual"))):
             t = Tarjeta(s2, tit, 16)
-            t.grid(row=i // 4, column=i % 4, sticky="nsew", padx=3, pady=3)
+            t.grid(row=i // 3, column=i % 3, sticky="nsew", padx=3, pady=3)
             self.t[k] = t
+        for c in range(3):
+            s2.columnconfigure(c, weight=1, uniform="em")
 
         # CONTROL DE ACEITES
-        s3 = self._seccion(p, "CONTROL DE ACEITES")
+        s3 = self._seccion(p, "CONTROL DE ACEITES", "aceite")
         s3.grid(row=1, column=1, sticky="nsew", padx=4, pady=4)
         self.s3 = s3
-        m, self.tv_ac = tabla(s3, [("c", "Componente", 190, "w"), ("f", "Frec. (h)", 60, "center"),
-                                   ("u", "Últ. cambio", 80, "center"), ("a", "Acumuladas", 80, "center"),
-                                   ("r", "Restantes", 70, "center"), ("e", "Estado", 110, "center"),
-                                   ("t", "Frecuencia de cambio", 150, "w")], height=13)
-        m.pack(fill="both", expand=True)
+        self.vida = VidaAceites(s3)
+        self.vida.pack(fill="both", expand=True)
         b = ttk.Frame(s3)
         b.pack(fill="x", pady=(6, 0))
         self._boton(b, "Cambio de aceite", self._cambio_aceite, "Naranja").pack(side="left")
         self._boton(b, "Solicitud de análisis", self._solicitud, "Verde").pack(side="left", padx=6)
 
         # AVANCE DE HORÓMETRO PROYECTADO
-        s4 = self._seccion(p, "AVANCE DE HORÓMETRO PROYECTADO")
+        s4 = self._seccion(p, "AVANCE DE HORÓMETRO PROYECTADO", "proyeccion")
         s4.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=4, pady=4)
         self.s4 = s4
         m, self.tv_av = tabla(s4, [("a", "Avance", 190, "w"), ("d", "Diario (h/día)", 90, "center"),
@@ -304,7 +385,7 @@ class App(tk.Tk):
         m.pack(fill="x")
 
         # DATOS DE LA PM A DAR POR EJECUTADA
-        s5 = self._seccion(p, "DATOS DE LA PM A DAR POR EJECUTADA")
+        s5 = self._seccion(p, "DATOS DE LA PM A DAR POR EJECUTADA", "historial")
         s5.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
         self.var_tipo = tk.StringVar()
         self.var_fecha = tk.StringVar()
@@ -326,7 +407,7 @@ class App(tk.Tk):
         self.lbl_prog_form = ttk.Label(s5, text="", style="Nota.TLabel")
         self.lbl_prog_form.grid(row=2, column=2, sticky="w", padx=8)
         ttk.Label(s5, text="Observación (opcional)").grid(row=3, column=0, sticky="w")
-        ttk.Entry(s5, textvariable=self.var_obs, width=48).grid(row=3, column=1, columnspan=2, sticky="w", pady=2)
+        ttk.Entry(s5, textvariable=self.var_obs, width=36).grid(row=3, column=1, columnspan=2, sticky="w", pady=2)
         b = ttk.Frame(s5)
         b.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
         self._boton(b, "Dar ejecutada", self._dar_ejecutada, "Verde").pack(side="left")
@@ -338,7 +419,7 @@ class App(tk.Tk):
                   ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         # ÚLTIMAS PM
-        s6 = self._seccion(p, "ÚLTIMAS PM REGISTRADAS DEL EQUIPO")
+        s6 = self._seccion(p, "ÚLTIMAS PM REGISTRADAS DEL EQUIPO", "reloj")
         s6.grid(row=3, column=0, sticky="nsew", padx=4, pady=4)
         m, self.tv_ult = tabla(s6, [("t", "Tipo PM", 70, "center"), ("f", "Fecha ejecución", 100, "center"),
                                     ("h", "Horómetro", 80, "center"), ("i", "Horas intervalo", 95, "center"),
@@ -346,7 +427,7 @@ class App(tk.Tk):
         m.pack(fill="both", expand=True)
 
         # KIT + PROYECCIÓN 6 MESES
-        s7 = self._seccion(p, "KIT DE MANTENIMIENTO")
+        s7 = self._seccion(p, "KIT DE MANTENIMIENTO", "kit")
         s7.grid(row=3, column=1, rowspan=2, sticky="nsew", padx=4, pady=4)
         self.s7 = s7
         self.lbl_kit = ttk.Label(s7, text="", font=("Segoe UI", 9, "bold"), foreground=AZUL, wraplength=640,
@@ -356,7 +437,7 @@ class App(tk.Tk):
                                     ("u", "Ubicación", 90, "center"), ("k", "Comentario", 300, "w")], height=14)
         m.pack(fill="both", expand=True)
 
-        s8 = self._seccion(p, "PROYECCIÓN 6 MESES (resumen · detalle en la pestaña Proyección)")
+        s8 = self._seccion(p, "PROYECCIÓN 6 MESES (resumen · detalle en la pestaña Proyección)", "calendario")
         s8.grid(row=4, column=0, sticky="nsew", padx=4, pady=4)
         self.s8 = s8
         m, self.tv_6m = tabla(s8, [("m", "Mes", 120, "w"), ("a", "PM 250", 70, "center"), ("b", "PM 500", 70, "center"),
@@ -365,6 +446,8 @@ class App(tk.Tk):
         m.pack(fill="x")
         for c in range(2):
             p.columnconfigure(c, weight=1, uniform="panel")
+        for w in p.grid_slaves():
+            w.grid_configure(padx=6, pady=6)
 
     def _restaurar_form(self):
         e = self.m.estado(self.eq)
@@ -390,10 +473,24 @@ class App(tk.Tk):
         e = m.estado(eq)
         hay = e["n"] > 0
         lect = e["con_lectura"]
-        self.lbl_modelo.configure(text=f"MODELO / FAENA: {e['modelo']} / {e['faena']}")
-        self.lbl_horo.configure(text=f"HORÓMETRO DE HOY: {fmt_num(e['horo_in']) if lect else '-'} h   ·   "
-                                     f"FECHA LECTURA: {fmt_fecha(e['fecha_lect']) or '-'}")
-        self.lbl_alerta.configure(text=e["alerta"])
+        self.lbl_modelo.configure(text=f"Modelo {e['modelo']}  ·  Faena {e['faena']}")
+        self.lbl_horo.configure(text=f"Horómetro hoy: {fmt_num(e['horo_in']) if lect else '-'} h  ·  "
+                                     f"lectura {fmt_fecha(e['fecha_lect']) or '-'}")
+        if e["alerta"]:
+            self.lbl_alerta.configure(text=f"⚠  {e['alerta']}")
+            self.lbl_alerta.pack(fill="x", before=self.nb)
+        else:
+            self.lbl_alerta.pack_forget()
+        col_g = {"Vencida": ROJO, "Próxima": "#E0A100", "En plazo": VERDE}.get(e["estado"], "#9AA6B2")
+        intervalo = float(m.p["intervalo"])
+        if hay:
+            grande = f"{fmt_num(e['rest'])} h" if e["rest"] > 0 else "VENCIDA"
+            chico = f"para la PM {fmt_tipo(e['sugerido'])}" if e["rest"] > 0 else \
+                f"excedida en {fmt_num(-e['rest'])} h"
+            pie = f"{fmt_num(max(0, e['acum']))} de {fmt_num(intervalo)} h usadas"
+        else:
+            grande, chico, pie = "–", "sin historial", ""
+        self.medidor.dibujar(max(0.0, e["acum"]) if hay else 0, intervalo, col_g, grande, chico, pie)
         col_prog = {"PROGRAMADA": VERDE, "PROGRAMADA CON RIESGO": NARANJA, "PROGRAMACIÓN VENCIDA": ROJO,
                     "NO PROGRAMADA": ROJO}.get(e["estado_prog"], AZUL)
         self.t["pm"].set(f"PM {fmt_tipo(e['sugerido'])}" if hay else "-")
@@ -424,12 +521,7 @@ class App(tk.Tk):
         self.t["semana"].set(f"S{m.hoy.isocalendar()[1]:02d}")
         # Aceites
         self.s3.configure(text=f"CONTROL DE ACEITES · MODELO {e['modelo']} (horas desde el último cambio)")
-        filas, tags = [], []
-        for a in m.control_aceites(eq):
-            filas.append([a["componente"], a["frecuencia"], a["ult"], a["acum"], a["rest"], a["estado"], a["texto"]])
-            tags.append({"Cambio vencido": "rojo", "Cambio próximo": "amarillo", "En condiciones": "verde"}
-                        .get(a["estado"], ""))
-        llenar(self.tv_ac, filas, tags)
+        self.vida.dibujar(m.control_aceites(eq))
         # Avance
         self.s4.configure(text=f"AVANCE DE HORÓMETRO PROYECTADO · EQUIPO {eq}   (cálculos con avance real + "
                                f"{fmt_pct(m.p['avance_extra'])})")
@@ -752,7 +844,7 @@ class App(tk.Tk):
         d.pack(fill="both", expand=True)
         p = d.interior
         s1 = self._seccion(p, "1. PERÍODO A PROYECTAR")
-        s1.pack(fill="x", pady=4)
+        s1.pack(fill="x", pady=6, padx=6)
         self.var_desde = tk.StringVar()
         self.var_hasta = tk.StringVar()
         ttk.Label(s1, text="Desde (dd-mm-aaaa)").grid(row=0, column=0, sticky="w")
@@ -771,20 +863,20 @@ class App(tk.Tk):
                            "hoy suma las PM ejecutadas del Historial; desde hoy, las PM proyectadas.",
                   style="Nota.TLabel").grid(row=2, column=0, columnspan=7, sticky="w", pady=(6, 0))
         self.s_pa2 = self._seccion(p, "2. COMPRA DEL PERÍODO")
-        self.s_pa2.pack(fill="x", pady=4)
+        self.s_pa2.pack(fill="x", pady=6, padx=6)
         self.pa2_marco = ttk.Frame(self.s_pa2)
         self.pa2_marco.pack(fill="x")
         self.s_pa3 = self._seccion(p, "3. RESUMEN POR AÑO DEL PERÍODO (litros sin margen; mes a mes en el Excel exportado)")
-        self.s_pa3.pack(fill="x", pady=4)
+        self.s_pa3.pack(fill="x", pady=6, padx=6)
         self.pa3_marco = ttk.Frame(self.s_pa3)
         self.pa3_marco.pack(fill="x")
         s4 = self._seccion(p, "4. PM DEL PERÍODO POR EQUIPO")
-        s4.pack(fill="x", pady=4)
+        s4.pack(fill="x", pady=6, padx=6)
         m, self.tv_pa4 = tabla(s4, [("r", "Referencia", 200, "w"), *[(f"e{i}", "", 110, "center") for i in range(8)]],
                                height=7, stretch_last=False)
         m.pack(fill="x")
         self.s_pa5 = self._seccion(p, "5. CONSUMO POR MODELO DE FLOTA (informativo)")
-        self.s_pa5.pack(fill="x", pady=4)
+        self.s_pa5.pack(fill="x", pady=6, padx=6)
         self.pa5_marco = ttk.Frame(self.s_pa5)
         self.pa5_marco.pack(fill="x")
 
@@ -898,7 +990,7 @@ class App(tk.Tk):
         d.pack(fill="both", expand=True)
         p = d.interior
         s1 = self._seccion(p, "1. PLAZO EN SEMANAS")
-        s1.pack(fill="x", pady=4)
+        s1.pack(fill="x", pady=6, padx=6)
         self.var_sini = tk.StringVar()
         self.var_sn = tk.StringVar()
         ttk.Label(s1, text="Fecha de inicio (dd-mm-aaaa)").grid(row=0, column=0, sticky="w")
@@ -915,12 +1007,12 @@ class App(tk.Tk):
                            "proyectadas. Cada semana son 7 días desde la fecha de inicio.", style="Nota.TLabel"
                   ).grid(row=2, column=0, columnspan=6, sticky="w", pady=(6, 0))
         self.s_sw2 = self._seccion(p, "2. ACEITES DEL PLAZO")
-        self.s_sw2.pack(fill="x", pady=4)
+        self.s_sw2.pack(fill="x", pady=6, padx=6)
         self.sw2_marco = ttk.Frame(self.s_sw2)
         self.sw2_marco.pack(fill="x")
         s3 = self._seccion(p, "3. SEMANA A SEMANA (litros sin margen · PM de cada equipo en la semana; «(ejec.)» = "
                               "registrada en el Historial)")
-        s3.pack(fill="x", pady=4)
+        s3.pack(fill="x", pady=6, padx=6)
         self.sw3_marco = ttk.Frame(s3)
         self.sw3_marco.pack(fill="x")
 
@@ -987,10 +1079,9 @@ class App(tk.Tk):
         d = Desplazable(tab)
         d.pack(fill="both", expand=True)
         p = d.interior
-        ttk.Label(p, text="KITS A SOLICITAR", style="Titulo.TLabel").pack(anchor="w")
-        self.lbl_ks = ttk.Label(p, text="", style="Nota.TLabel", justify="left")
-        self.lbl_ks.pack(anchor="w")
-        b = ttk.Frame(p)
+        self.lbl_ks = ttk.Label(p, text="", style="PagNota.TLabel", justify="left")
+        self.lbl_ks.pack(anchor="w", padx=6)
+        b = ttk.Frame(p, style="Pagina.TFrame")
         b.pack(anchor="w", pady=4)
         self._boton(b, "Proyección aceites", lambda: self.nb.select(self.tabs["Proyección aceites"]), "Naranja"
                     ).pack(side="left")
@@ -998,15 +1089,15 @@ class App(tk.Tk):
                     ).pack(side="left", padx=6)
         s1 = self._seccion(p, "1. PM POR EQUIPO (período por fechas: solo proyectadas · plazo en semanas: ejecutadas + "
                               "proyectadas)")
-        s1.pack(fill="x", pady=4)
+        s1.pack(fill="x", pady=6, padx=6)
         self.ks1_marco = ttk.Frame(s1)
         self.ks1_marco.pack(fill="x")
         s2 = self._seccion(p, "2. KITS A SOLICITAR (1 kit por PM)")
-        s2.pack(fill="x", pady=4)
+        s2.pack(fill="x", pady=6, padx=6)
         self.ks2_marco = ttk.Frame(s2)
         self.ks2_marco.pack(fill="x")
         s3 = self._seccion(p, "3. REPUESTOS SUELTOS (adicionales, pedir por separado y tomar de bodega)")
-        s3.pack(fill="x", pady=4)
+        s3.pack(fill="x", pady=6, padx=6)
         self.ks3_marco = ttk.Frame(s3)
         self.ks3_marco.pack(fill="x")
 
@@ -1119,7 +1210,8 @@ class App(tk.Tk):
         d = Desplazable(tab)
         d.pack(fill="both", expand=True)
         p = d.interior
-        ttk.Label(p, text="CONFIGURACIÓN DEL SISTEMA", style="Titulo.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(p, text="Parámetros y tablas del plan de mantención", style="PagNota.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=6)
         s1 = self._seccion(p, "Parámetros")
         s1.grid(row=1, column=0, sticky="nw", padx=4, pady=4)
         self.vars_param = {}
