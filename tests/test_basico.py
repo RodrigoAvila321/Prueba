@@ -75,3 +75,29 @@ def test_resumen_pdf(tmp_path):
     assert [a["estado"] for p in res["pms"] for a in p["aceites"]] == ["Atrasado 20 h", "Adelantado 30 h"]
     exportar_resumen_pdf(m, dt.date(2026, 1, 10), hoy, "Turno A", str(tmp_path / "r.pdf"), "u")
     assert (tmp_path / "r.pdf").stat().st_size > 2000
+
+
+def test_restaurar_respaldo(tmp_path):
+    import sqlite3
+    import pytest
+    origen = _repo(tmp_path)
+    origen.agregar_historial({"id": 1, "equipo": "X1", "modelo": "M", "tipo": 250, "fecha": dt.date(2026, 1, 1),
+                              "horo": 250})
+    origen.cx.commit()
+    resp = tmp_path / "respaldo.db"
+    dst = sqlite3.connect(resp)
+    origen.cx.backup(dst)
+    dst.close()
+    nuevo = Repositorio(tmp_path / "nuevo.db")
+    r = nuevo.restaurar_desde(resp)
+    assert r["historial"] == 1 and nuevo.get_config("equipos")[0]["equipo"] == "X1"
+    malo = tmp_path / "malo.db"
+    malo.write_bytes(b"no es una base")
+    with pytest.raises(ValueError):
+        nuevo.restaurar_desde(malo)
+    otro = sqlite3.connect(tmp_path / "otro.db")
+    otro.execute("CREATE TABLE x(a)")
+    otro.close()
+    with pytest.raises(ValueError):
+        nuevo.restaurar_desde(tmp_path / "otro.db")
+    assert len(nuevo.historial()) == 1

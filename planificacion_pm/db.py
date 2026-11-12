@@ -179,6 +179,32 @@ class Repositorio:
     def modelos_plantilla(self) -> list[str]:
         return [r[0] for r in self.cx.execute("SELECT modelo FROM plantillas ORDER BY modelo")]
 
+    # ------------------------------------------------------------ respaldos
+    def restaurar_desde(self, ruta: str | Path) -> dict:
+        """Reemplaza todos los datos por los de un respaldo (.db) de Planificación PM."""
+        ruta = Path(ruta)
+        if ruta.resolve() == self.ruta.resolve():
+            raise ValueError("El archivo elegido es la base de datos que está en uso.")
+        src = sqlite3.connect(str(ruta))
+        try:
+            try:
+                tablas = {r[0] for r in src.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            except sqlite3.DatabaseError as ex:
+                raise ValueError(f"El archivo no es una base de datos válida ({ex}).") from ex
+            if {"historial", "aceites", "config"} - tablas or \
+                    not src.execute("SELECT 1 FROM config WHERE clave='equipos'").fetchone():
+                raise ValueError("El archivo no es un respaldo de Planificación PM.")
+            res = {"historial": src.execute("SELECT COUNT(*) FROM historial").fetchone()[0],
+                   "aceites": src.execute("SELECT COUNT(*) FROM aceites").fetchone()[0]}
+            self.cx.commit()
+            src.backup(self.cx)
+        finally:
+            src.close()
+        self.cx.executescript(ESQUEMA)
+        self.cx.commit()
+        res["plantillas"] = len(self.modelos_plantilla())
+        return res
+
     # ------------------------------------------------------------------ limpiar
     def vaciar_todo(self):
         for t in ("historial", "aceites", "lecturas", "programacion", "config", "plantillas"):

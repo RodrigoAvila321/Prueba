@@ -28,6 +28,8 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
 1. Al abrir por primera vez, el programa pide el libro Excel original (`.xlsm`) e importa Historial,
    cambios de aceite, lecturas, programación, configuración, kits, descripciones y los formatos de
    solicitud de análisis (hojas ocultas «Formato DI650i / DR412i»).
+   También acepta un respaldo del programa (`.db`) para recuperar todos los datos tal como estaban.
+   Más adelante se puede importar o restaurar desde **Configuración > Importar o restaurar datos**.
 2. Los datos quedan en `Documentos\PlanificacionPM\PlanificacionPM_datos.db`, así que el `.exe` puede
    estar en el escritorio o en cualquier carpeta. Si junto al `.exe` existe un `PlanificacionPM_datos.db`, se usa
    ese (modo portátil, útil en una carpeta compartida). Respáldelo desde **Configuración > Respaldar base de datos**.

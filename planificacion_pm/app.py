@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-import shutil
 import subprocess
 import sys
 import tkinter as tk
@@ -148,19 +147,19 @@ class App(tk.Tk):
     # ------------------------------------------------------------ primer inicio
     def _primer_inicio(self) -> bool:
         messagebox.showinfo(
-            TITULO, "Bienvenido.\n\nLa base de datos está vacía. Seleccione el libro Excel original "
-                    "(Planificacion_PM .xlsm) para importar el Historial, los cambios de aceite, las lecturas, "
-                    "la programación, la configuración, los kits y los formatos de solicitud de análisis.\n\n"
+            TITULO, "Bienvenido.\n\nLa base de datos está vacía. Seleccione uno de estos archivos:\n\n"
+                    "• El libro Excel original (Planificacion_PM .xlsm), para importar Historial, aceites, lecturas, "
+                    "programación, configuración, kits y formatos de solicitud de análisis.\n"
+                    "• Un respaldo del programa (.db), para recuperar todos los datos tal como estaban.\n\n"
                     f"Los datos se guardarán en:\n{self.ruta_db}")
-        ruta = filedialog.askopenfilename(title="Libro Excel a importar",
-                                          filetypes=[("Libro de Excel", "*.xlsm *.xlsx"), ("Todos", "*.*")])
+        ruta = filedialog.askopenfilename(title="Libro Excel o respaldo a importar", filetypes=self.TIPOS_IMPORTAR)
         if not ruta:
-            messagebox.showwarning(TITULO, "No se importó ningún libro. El programa se cerrará.")
+            messagebox.showwarning(TITULO, "No se importó ningún archivo. El programa se cerrará.")
             return False
         try:
-            r = importar_libro(ruta, self.repo)
+            r = self._importar_archivo(ruta)
         except Exception as ex:
-            messagebox.showerror(TITULO, f"No fue posible importar el libro.\nDetalle: {ex}")
+            messagebox.showerror(TITULO, f"No fue posible importar el archivo.\nDetalle: {ex}")
             self.repo.vaciar_todo()
             self.repo.cx.commit()
             return False
@@ -169,6 +168,15 @@ class App(tk.Tk):
                                     f"- {r.get('plantillas', 0)} formatos de solicitud de análisis")
         self._ofrecer_acceso_directo()
         return True
+
+    TIPOS_IMPORTAR = [("Excel o respaldo (.xlsm, .xlsx, .db)", "*.xlsm *.xlsx *.db"),
+                      ("Libro de Excel", "*.xlsm *.xlsx"), ("Respaldo de Planificación PM", "*.db")]
+
+    def _importar_archivo(self, ruta) -> dict:
+        """Importa un libro Excel o restaura un respaldo .db, según la extensión."""
+        if str(ruta).lower().endswith(".db"):
+            return self.repo.restaurar_desde(ruta)
+        return importar_libro(ruta, self.repo)
 
     def _ofrecer_acceso_directo(self):
         if sys.platform.startswith("win") and messagebox.askyesno(
@@ -1293,7 +1301,7 @@ class App(tk.Tk):
             row=2, column=0, pady=6, sticky="w")
         self._boton(s3, "Importar formatos de solicitud desde Excel", self._importar_formatos).grid(
             row=1, column=1, padx=6, sticky="w")
-        self._boton(s3, "Reimportar todo desde Excel (reemplaza los datos)", self._reimportar, "Rojo").grid(
+        self._boton(s3, "Importar o restaurar datos (Excel o respaldo .db)", self._reimportar, "Rojo").grid(
             row=1, column=2, sticky="w")
 
     def _refrescar_config(self):
@@ -1366,27 +1374,36 @@ class App(tk.Tk):
 
     def _reimportar(self):
         if not messagebox.askyesno(TITULO, "Se reemplazarán TODOS los datos (Historial, aceites, lecturas, "
-                                           "programación y configuración) por los del libro Excel elegido.\n\n"
-                                           "Se creará un respaldo automático antes. ¿Continuar?", icon="warning",
-                                   default=messagebox.NO, parent=self):
+                                           "programación y configuración) por los del archivo elegido:\n\n"
+                                           "• un libro Excel (.xlsm / .xlsx), o\n"
+                                           "• un respaldo del programa (.db).\n\n"
+                                           "Antes se creará un respaldo automático de los datos actuales. ¿Continuar?",
+                                   icon="warning", default=messagebox.NO, parent=self):
             return
-        ruta = filedialog.askopenfilename(parent=self, title="Libro Excel a importar",
-                                          filetypes=[("Libro de Excel", "*.xlsm *.xlsx")])
+        ruta = filedialog.askopenfilename(parent=self, title="Libro Excel o respaldo a importar",
+                                          filetypes=self.TIPOS_IMPORTAR)
         if not ruta:
             return
         self.repo.cx.commit()
         resp = self.ruta_db.with_name(f"{self.ruta_db.stem}_antes_de_importar_{dt.datetime.now():%Y%m%d_%H%M%S}.db")
-        shutil.copy2(self.ruta_db, resp)
+        destino = __import__("sqlite3").connect(str(resp))
+        with destino:
+            self.repo.cx.backup(destino)
+        destino.close()
         try:
-            r = importar_libro(ruta, self.repo)
+            r = self._importar_archivo(ruta)
         except Exception as ex:
-            self.ui.error(f"No fue posible importar el libro (los datos no cambiaron).\nDetalle: {ex}")
+            self.ui.error(f"No fue posible importar el archivo (los datos no cambiaron).\nDetalle: {ex}")
             return
         self.m.recargar()
         self.cb_eq.configure(values=self.m.lista_equipos())
+        sel = self.repo.get_config("equipo_sel")
+        if sel in self.m.lista_equipos():
+            self.var_eq.set(sel)
         self.refrescar()
-        self.ui.info(f"Importación terminada: {r.get('historial', 0)} PM y {r.get('aceites', 0)} registros de aceite.\n"
-                     f"Respaldo previo: {resp}")
+        tipo = "Respaldo restaurado" if str(ruta).lower().endswith(".db") else "Importación terminada"
+        self.ui.info(f"{tipo}: {r.get('historial', 0)} PM y {r.get('aceites', 0)} registros de aceite.\n"
+                     f"Respaldo previo de los datos reemplazados:\n{resp}")
 
     # ------------------------------------------------------------ INSTRUCCIONES
     def _tab_instrucciones(self, tab):

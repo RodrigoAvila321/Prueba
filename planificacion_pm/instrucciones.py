@@ -2,7 +2,7 @@
 
 TEXTO = """
 # A. Inicio
-1. Al abrir el programa por primera vez, se pide el libro Excel original (.xlsm) para importar Historial, cambios de aceite, lecturas, programación, configuración, kits y formatos de solicitud de análisis.
+1. Al abrir el programa por primera vez, se pide el libro Excel original (.xlsm) o un respaldo (.db) para importar Historial, cambios de aceite, lecturas, programación, configuración, kits y formatos de solicitud de análisis.
 2. Los datos quedan en Documentos\\PlanificacionPM\\PlanificacionPM_datos.db (o junto al ejecutable, si ahí ya existe ese archivo). Respáldelo periódicamente (Configuración > Respaldar base de datos).
 3. El programa es independiente de Excel: ábralo con el acceso directo «Planificación PM» del escritorio (Configuración > Crear acceso directo en el escritorio).
 4. Cada vez que se abre, el programa solicita el horómetro de hoy del equipo seleccionado, mostrando la última PM y la última lectura como referencia. Si se cancela, el Panel muestra una alerta roja «Horómetro no actualizado hoy».
@@ -52,5 +52,5 @@ TEXTO = """
 1. Historial y Aceites se pueden filtrar por equipo, editar (doble clic) y exportar a Excel.
 2. «Reparar claves» recalcula las posiciones de ciclo de las PM mayores (se hace solo al editar). «Corregir fechas futuras» quita fechas de ejecución posteriores a hoy (deja nota en Observación).
 3. «Recalcular horas acumuladas» rehace la columna de horas acumuladas al cambio de la tabla Aceites.
-4. Configuración: parámetros, equipos, ciclos, tipos válidos, aceites, consumo por PM, consumo diario, kits y descripciones. «Reimportar todo desde Excel» reemplaza los datos (con respaldo automático previo).
+4. Configuración: parámetros, equipos, ciclos, tipos válidos, aceites, consumo por PM, consumo diario, kits y descripciones. «Importar o restaurar datos» reemplaza los datos por los de un libro Excel (.xlsm/.xlsx) o de un respaldo del programa (.db), con respaldo automático previo.
 """
