@@ -12,7 +12,8 @@ Cada `push` compila el `.exe` en GitHub Actions (workflow **Compilar ejecutable 
 2. Descargue el artefacto **PlanificacionPM-windows** (zip con `PlanificacionPM.exe`).
 3. Copie `PlanificacionPM.exe` a una carpeta propia (por ejemplo `Documentos\PlanificacionPM`).
 
-Para compilarlo manualmente en Windows:
+Para compilarlo en Windows sin GitHub: instale Python 3.12 desde python.org (marque «Add python.exe to PATH»),
+haga doble clic en `compilar_windows.bat` y tome el ejecutable de `dist\PlanificacionPM.exe`. Equivale a:
 
 ```bash
 pip install -r requirements-dev.txt
