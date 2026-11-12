@@ -1,0 +1,32 @@
+name: Compilar ejecutable Windows
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  workflow_dispatch:
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Pruebas
+        run: python -m pytest -q tests
+
+      - name: Compilar PlanificacionPM.exe
+        run: pyinstaller --noconfirm --onefile --windowed --name PlanificacionPM main.py
+
+      - name: Publicar ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlanificacionPM-windows
+          path: dist/PlanificacionPM.exe
+          if-no-files-found: error

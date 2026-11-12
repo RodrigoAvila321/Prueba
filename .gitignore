@@ -1,0 +1,13 @@
+# Datos (no se versionan: contienen información de la operación)
+*.db
+*.xlsm
+*.xlsx
+# Compilación
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
