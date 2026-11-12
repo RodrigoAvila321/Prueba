@@ -25,17 +25,41 @@ NOMBRE_DB = "PlanificacionPM_datos.db"
 
 
 def carpeta_datos() -> Path:
-    """Base de datos junto al ejecutable (fácil de respaldar); si no se puede escribir, en APPDATA."""
-    base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
+    """Carpeta de datos del programa.
+    - Si junto al ejecutable ya existe una base de datos, se usa esa (modo portátil, p. ej. en una carpeta compartida).
+    - Si no, Documentos\\PlanificacionPM (el .exe puede estar en el escritorio o en cualquier carpeta)."""
+    junto = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
+    if (junto / NOMBRE_DB).exists():
+        return junto
+    docs = Path.home() / "Documents"
+    if not docs.exists():
+        docs = Path.home()
+    destino = docs / "PlanificacionPM"
     try:
-        prueba = base / ".planpm_prueba"
-        prueba.write_text("ok")
-        prueba.unlink()
-        return base
+        destino.mkdir(parents=True, exist_ok=True)
+        return destino
     except OSError:
         alt = Path(os.environ.get("APPDATA") or Path.home()) / "PlanificacionPM"
         alt.mkdir(parents=True, exist_ok=True)
         return alt
+
+
+def crear_acceso_directo() -> str:
+    """Crea «Planificación PM» en el escritorio de Windows apuntando a este ejecutable."""
+    if not sys.platform.startswith("win"):
+        raise OSError("El acceso directo solo se crea en Windows.")
+    exe = sys.executable if getattr(sys, "frozen", False) else sys.executable.replace("python.exe", "pythonw.exe")
+    args = "" if getattr(sys, "frozen", False) else f'"{Path(sys.argv[0]).resolve()}"'
+    ps = ("$d=[Environment]::GetFolderPath('Desktop');"
+          "$s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Planificación PM.lnk'));"
+          f"$s.TargetPath='{exe}';$s.Arguments='{args}';"
+          f"$s.WorkingDirectory='{Path(exe).parent}';$s.IconLocation='{exe},0';$s.Save();"
+          "Write-Output (Join-Path $d 'Planificación PM.lnk')")
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                       capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if r.returncode != 0:
+        raise OSError(r.stderr.strip() or "PowerShell no pudo crear el acceso directo.")
+    return r.stdout.strip()
 
 
 def abrir_archivo(ruta: str):
@@ -160,7 +184,21 @@ class App(tk.Tk):
         messagebox.showinfo(TITULO, f"Importación terminada:\n- {r.get('historial', 0)} PM del Historial\n"
                                     f"- {r.get('aceites', 0)} registros de aceite\n"
                                     f"- {r.get('plantillas', 0)} formatos de solicitud de análisis")
+        self._ofrecer_acceso_directo()
         return True
+
+    def _ofrecer_acceso_directo(self):
+        if sys.platform.startswith("win") and messagebox.askyesno(
+                TITULO, "¿Desea crear un acceso directo «Planificación PM» en el escritorio para abrir el programa?"):
+            self._acceso_directo(silencioso=True)
+
+    def _acceso_directo(self, silencioso=False):
+        try:
+            ruta = crear_acceso_directo()
+        except Exception as ex:
+            messagebox.showwarning(TITULO, f"No fue posible crear el acceso directo.\nDetalle: {ex}")
+            return
+        messagebox.showinfo(TITULO, f"Acceso directo creado:\n{ruta}")
 
     def _al_abrir(self):
         """Auto_Open: solicita el horómetro de hoy del equipo seleccionado."""
@@ -1133,6 +1171,8 @@ class App(tk.Tk):
         ttk.Label(s3, text=f"Base de datos: {self.ruta_db}", style="Nota.TLabel").grid(row=0, column=0, columnspan=4,
                                                                                     sticky="w")
         self._boton(s3, "Respaldar base de datos", self._respaldar, "Verde").grid(row=1, column=0, pady=6, sticky="w")
+        self._boton(s3, "Crear acceso directo en el escritorio", self._acceso_directo).grid(
+            row=2, column=0, pady=6, sticky="w")
         self._boton(s3, "Importar formatos de solicitud desde Excel", self._importar_formatos).grid(
             row=1, column=1, padx=6, sticky="w")
         self._boton(s3, "Reimportar todo desde Excel (reemplaza los datos)", self._reimportar, "Rojo").grid(

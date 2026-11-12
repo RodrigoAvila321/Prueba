@@ -3,9 +3,10 @@
 TEXTO = """
 # A. Inicio
 1. Al abrir el programa por primera vez, se pide el libro Excel original (.xlsm) para importar Historial, cambios de aceite, lecturas, programación, configuración, kits y formatos de solicitud de análisis.
-2. Los datos quedan en el archivo «PlanificacionPM_datos.db», junto al ejecutable. Respáldelo periódicamente (Configuración > Respaldar base de datos).
-3. Cada vez que se abre, el programa solicita el horómetro de hoy del equipo seleccionado, mostrando la última PM y la última lectura como referencia. Si se cancela, el Panel muestra una alerta roja «Horómetro no actualizado hoy».
-4. Al cambiar de equipo, el Panel muestra la última lectura de ese equipo. Para actualizarla use «Actualizar horómetro». Las lecturas quedan en la pestaña «Lecturas y programación».
+2. Los datos quedan en Documentos\\PlanificacionPM\\PlanificacionPM_datos.db (o junto al ejecutable, si ahí ya existe ese archivo). Respáldelo periódicamente (Configuración > Respaldar base de datos).
+3. El programa es independiente de Excel: ábralo con el acceso directo «Planificación PM» del escritorio (Configuración > Crear acceso directo en el escritorio).
+4. Cada vez que se abre, el programa solicita el horómetro de hoy del equipo seleccionado, mostrando la última PM y la última lectura como referencia. Si se cancela, el Panel muestra una alerta roja «Horómetro no actualizado hoy».
+5. Al cambiar de equipo, el Panel muestra la última lectura de ese equipo. Para actualizarla use «Actualizar horómetro». Las lecturas quedan en la pestaña «Lecturas y programación».
 
 # B. Equipos y modelos
 1. D10 y D11 son DI650i: ciclo 250 → 500 → 250 → 1000 → 250 → 1500, con 7 aceites.

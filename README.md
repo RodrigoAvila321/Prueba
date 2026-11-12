@@ -27,9 +27,12 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
 1. Al abrir por primera vez, el programa pide el libro Excel original (`.xlsm`) e importa Historial,
    cambios de aceite, lecturas, programación, configuración, kits, descripciones y los formatos de
    solicitud de análisis (hojas ocultas «Formato DI650i / DR412i»).
-2. Los datos quedan en `PlanificacionPM_datos.db`, junto al ejecutable (si la carpeta no permite
-   escritura, en `%APPDATA%\PlanificacionPM`). Respáldelo desde **Configuración > Respaldar base de datos**.
-3. Igual que el `Auto_Open` del libro, cada vez que se abre se pide el horómetro de hoy del equipo seleccionado.
+2. Los datos quedan en `Documentos\PlanificacionPM\PlanificacionPM_datos.db`, así que el `.exe` puede
+   estar en el escritorio o en cualquier carpeta. Si junto al `.exe` existe un `PlanificacionPM_datos.db`, se usa
+   ese (modo portátil, útil en una carpeta compartida). Respáldelo desde **Configuración > Respaldar base de datos**.
+3. Tras la importación se ofrece crear el acceso directo **Planificación PM** en el escritorio (también en
+   **Configuración > Crear acceso directo en el escritorio**). Desde ahí se abre como cualquier aplicación.
+4. Igual que el `Auto_Open` del libro, cada vez que se abre se pide el horómetro de hoy del equipo seleccionado.
 
 ## Correspondencia con el libro original
 
