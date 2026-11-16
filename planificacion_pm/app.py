@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import openpyxl
 
-from . import TITULO, __version__, exportar, resumen_pdf, tema
+from . import TITULO, __version__, actualizar, exportar, resumen_pdf, tema
 from .acciones import Acciones
 from .db import PARAMS_DEF, Repositorio
 from .importar import extraer_hoja, importar_libro
@@ -195,6 +195,105 @@ class App(tk.Tk):
         """Auto_Open: solicita el horómetro de hoy del equipo seleccionado."""
         self.acc.actualizar_horometro(self.var_eq.get(), al_abrir=True)
         self.refrescar()
+        self._revisar_version_en_segundo_plano()
+
+    # ------------------------------------------------------------ actualizaciones
+    def _revisar_version_en_segundo_plano(self):
+        """Al abrir: consulta en segundo plano si hay una versión nueva y la anuncia en la barra lateral."""
+        import threading
+
+        def tarea():
+            try:
+                info = actualizar.ultima_version(timeout=6)
+            except Exception:
+                return
+            if info and actualizar.es_mas_nueva(info["version"]):
+                self.after(0, lambda: self._anunciar_version(info))
+        threading.Thread(target=tarea, daemon=True).start()
+
+    def _anunciar_version(self, info):
+        try:
+            self.lbl_nueva.configure(text=f"⬆  Nueva versión {info['version']} disponible.\nClic para actualizar.")
+            self.lbl_nueva.pack(side="bottom", fill="x", padx=12, pady=(0, 4))
+        except tk.TclError:
+            pass
+
+    def _buscar_actualizacion(self):
+        try:
+            self.config(cursor="watch")
+            self.update_idletasks()
+            info = actualizar.ultima_version()
+        except Exception as ex:
+            self.ui.aviso("No fue posible consultar las actualizaciones (revise la conexión a internet).\n"
+                          f"Detalle: {ex}\n\nTambién puede descargar la última versión desde:\n{actualizar.PAGINA}")
+            return
+        finally:
+            self.config(cursor="")
+        if not info or not actualizar.es_mas_nueva(info["version"]):
+            self.ui.info(f"Ya tiene la última versión (v{__version__}).")
+            return
+        exe = actualizar.ejecutable_actual()
+        if exe is None:
+            self.ui.info(f"Hay una versión nueva ({info['version']}), pero el programa no se está ejecutando como "
+                         f".exe. Descárguela desde:\n{actualizar.PAGINA}")
+            return
+        notas = info["notas"].strip()
+        notas = ("\n\nNovedades:\n" + notas[:700]) if notas else ""
+        if not messagebox.askyesno(TITULO, f"Hay una nueva versión disponible: {info['version']} "
+                                           f"(instalada: v{__version__}).{notas}\n\n¿Desea descargarla e instalarla "
+                                           "ahora? El programa se cerrará y se abrirá solo con la versión nueva. "
+                                           "Sus datos se conservan (antes se hará un respaldo).", parent=self):
+            return
+        nuevo = exe.with_name("PlanificacionPM_nuevo.exe")
+        dlg = tk.Toplevel(self)
+        dlg.title(TITULO)
+        dlg.transient(self)
+        dlg.resizable(False, False)
+        tk.Label(dlg, text=f"Descargando la versión {info['version']}…", background=tema.TARJETA,
+                 font=(tema.FUENTE, 10, "bold"), padx=20, pady=12).pack(fill="x")
+        barra = ttk.Progressbar(dlg, length=360, mode="determinate", maximum=100)
+        barra.pack(padx=20, pady=(0, 18))
+        dlg.grab_set()
+        estado = {"pct": 0.0, "fin": False, "error": None}
+
+        def progreso(hecho, total):
+            estado["pct"] = hecho * 100 / total if total else 0
+
+        def tarea():
+            try:
+                actualizar.descargar(info["url"], nuevo, progreso)
+            except Exception as ex:
+                estado["error"] = ex
+            estado["fin"] = True
+
+        import threading
+        threading.Thread(target=tarea, daemon=True).start()
+
+        def vigilar():
+            barra["value"] = estado["pct"]
+            if not estado["fin"]:
+                self.after(150, vigilar)
+                return
+            dlg.destroy()
+            if estado["error"]:
+                self.ui.error(f"No fue posible descargar la actualización.\nDetalle: {estado['error']}\n\n"
+                              f"Puede descargarla manualmente desde:\n{actualizar.PAGINA}")
+                return
+            try:
+                self.repo.cx.commit()
+                resp = self.ruta_db.with_name(f"{self.ruta_db.stem}_antes_de_actualizar_v{__version__}.db")
+                destino = __import__("sqlite3").connect(str(resp))
+                with destino:
+                    self.repo.cx.backup(destino)
+                destino.close()
+                actualizar.instalar_y_reiniciar(nuevo, exe)
+            except Exception as ex:
+                self.ui.error(f"No fue posible instalar la actualización.\nDetalle: {ex}")
+                return
+            self.repo.cerrar()
+            self.destroy()
+            os._exit(0)
+        vigilar()
 
     # ---------------------------------------------------------------- armado
     PAGINAS = (("Panel", "panel", "Panel del equipo"), ("Historial", "historial", "Historial de PM"),
@@ -224,6 +323,9 @@ class App(tk.Tk):
             self._items[nombre] = self._item_lateral(lat, nombre, ic, etiqueta)
         tk.Label(lat, text=f"v{__version__}  ·  datos locales", background=tema.NAVY, foreground="#7F8DA3",
                  font=(tema.FUENTE, 8)).pack(side="bottom", anchor="w", padx=18, pady=12)
+        self.lbl_nueva = tk.Label(lat, text="", background=tema.ACENTO, foreground="#FFFFFF", cursor="hand2",
+                                  font=(tema.FUENTE, 9, "bold"), padx=10, pady=8, justify="left", wraplength=190)
+        self.lbl_nueva.bind("<Button-1>", lambda _e: self._buscar_actualizacion())
 
         # ---- zona principal
         cuerpo = ttk.Frame(self, style="Pagina.TFrame")
@@ -1301,8 +1403,14 @@ class App(tk.Tk):
             row=2, column=0, pady=6, sticky="w")
         self._boton(s3, "Importar formatos de solicitud desde Excel", self._importar_formatos).grid(
             row=1, column=1, padx=6, sticky="w")
-        self._boton(s3, "Importar o restaurar datos (Excel o respaldo .db)", self._reimportar, "Rojo").grid(
+        self._boton(s3, "Importar datos desde Excel (.xlsm)", lambda: self._reimportar("excel"), "Rojo").grid(
             row=1, column=2, sticky="w")
+        self._boton(s3, "Restaurar respaldo (.db)", lambda: self._reimportar("db"), "Rojo").grid(
+            row=2, column=2, pady=6, sticky="w")
+        self._boton(s3, "Buscar actualizaciones", self._buscar_actualizacion, "Naranja").grid(
+            row=2, column=1, padx=6, pady=6, sticky="w")
+        ttk.Label(s3, text=f"Versión instalada: v{__version__}", style="Nota.TLabel").grid(
+            row=3, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
     def _refrescar_config(self):
         p = self.m.p
@@ -1372,16 +1480,20 @@ class App(tk.Tk):
             return
         self.ui.info(f"{n} formato(s) importado(s)." if n else "El libro no tiene hojas «Formato <modelo>».")
 
-    def _reimportar(self):
+    def _reimportar(self, tipo="excel"):
+        origen = ("el respaldo del programa (.db) que elija" if tipo == "db"
+                  else "el libro Excel (.xlsm / .xlsx) que elija")
         if not messagebox.askyesno(TITULO, "Se reemplazarán TODOS los datos (Historial, aceites, lecturas, "
-                                           "programación y configuración) por los del archivo elegido:\n\n"
-                                           "• un libro Excel (.xlsm / .xlsx), o\n"
-                                           "• un respaldo del programa (.db).\n\n"
+                                           f"programación y configuración) por los de {origen}.\n\n"
                                            "Antes se creará un respaldo automático de los datos actuales. ¿Continuar?",
                                    icon="warning", default=messagebox.NO, parent=self):
             return
-        ruta = filedialog.askopenfilename(parent=self, title="Libro Excel o respaldo a importar",
-                                          filetypes=self.TIPOS_IMPORTAR)
+        if tipo == "db":
+            ruta = filedialog.askopenfilename(parent=self, title="Respaldo (.db) a restaurar",
+                                              filetypes=[("Respaldo de Planificación PM", "*.db")])
+        else:
+            ruta = filedialog.askopenfilename(parent=self, title="Libro Excel a importar",
+                                              filetypes=[("Libro de Excel", "*.xlsm *.xlsx")])
         if not ruta:
             return
         self.repo.cx.commit()

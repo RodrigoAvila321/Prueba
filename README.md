@@ -6,6 +6,17 @@ usa como formato de salida en las exportaciones.
 
 ## Obtener el ejecutable
 
+**Enlace permanente a la última versión:** https://github.com/RodrigoAvila321/Prueba/releases/latest
+(descargue `PlanificacionPM.exe` en «Assets»).
+
+### Actualizar sin reemplazar el archivo a mano
+
+Desde la v10.3 el programa se actualiza solo: al abrirlo consulta si hay una versión nueva y la anuncia en la
+barra lateral. Con **Configuración > Buscar actualizaciones** la descarga, respalda los datos, reemplaza el `.exe`
+y se vuelve a abrir. Cada `push` publica la versión indicada en `planificacion_pm/__init__.py` como Release.
+
+### Artefactos de compilación
+
 Cada `push` compila el `.exe` en GitHub Actions (workflow **Compilar ejecutable Windows**):
 
 1. Vaya a la pestaña **Actions** del repositorio, abra la última ejecución correcta.
@@ -29,7 +40,7 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
    cambios de aceite, lecturas, programación, configuración, kits, descripciones y los formatos de
    solicitud de análisis (hojas ocultas «Formato DI650i / DR412i»).
    También acepta un respaldo del programa (`.db`) para recuperar todos los datos tal como estaban.
-   Más adelante se puede importar o restaurar desde **Configuración > Importar o restaurar datos**.
+   Más adelante: **Configuración > Importar datos desde Excel** o **Restaurar respaldo (.db)**.
 2. Los datos quedan en `Documentos\PlanificacionPM\PlanificacionPM_datos.db`, así que el `.exe` puede
    estar en el escritorio o en cualquier carpeta. Si junto al `.exe` existe un `PlanificacionPM_datos.db`, se usa
    ese (modo portátil, útil en una carpeta compartida). Respáldelo desde **Configuración > Respaldar base de datos**.

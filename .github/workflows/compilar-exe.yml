@@ -5,6 +5,9 @@ on:
     branches: ["main", "claude/**"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   windows-exe:
     runs-on: windows-latest
@@ -27,9 +30,29 @@ jobs:
       - name: Compilar PlanificacionPM.exe
         run: pyinstaller --noconfirm --onefile --windowed --icon icono.ico --name PlanificacionPM main.py
 
-      - name: Publicar ejecutable
+      - name: Publicar ejecutable (artefacto)
         uses: actions/upload-artifact@v4
         with:
           name: PlanificacionPM-windows
           path: dist/PlanificacionPM.exe
           if-no-files-found: error
+
+      - name: Leer versión
+        id: ver
+        shell: bash
+        run: echo "v=$(python -c 'from planificacion_pm import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar versión (GitHub Release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Planificación PM v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          files: dist/PlanificacionPM.exe
+          make_latest: true
+          body: |
+            Descargue **PlanificacionPM.exe** (abajo, en «Assets») y ábralo con doble clic.
+
+            Si ya tiene instalada una versión con actualización automática (v10.3 o posterior), no necesita descargar nada:
+            el programa avisa en la barra lateral y se actualiza desde **Configuración > Buscar actualizaciones**.
+            Sus datos se conservan (están en Documentos\PlanificacionPM).

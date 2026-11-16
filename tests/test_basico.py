@@ -101,3 +101,15 @@ def test_restaurar_respaldo(tmp_path):
     with pytest.raises(ValueError):
         nuevo.restaurar_desde(tmp_path / "otro.db")
     assert len(nuevo.historial()) == 1
+
+
+def test_versiones_y_script():
+    from pathlib import Path
+
+    from planificacion_pm import actualizar
+    assert actualizar.es_mas_nueva("v10.3", "10.2")
+    assert actualizar.es_mas_nueva("v11", "10.9.9")
+    assert not actualizar.es_mas_nueva("v10.2", "10.2")
+    assert not actualizar.es_mas_nueva("v10.1", "10.2")
+    bat = actualizar.script_reemplazo(Path("C:/a/nuevo.exe"), Path("C:/a/PlanificacionPM.exe"))
+    assert "move /Y" in bat and 'start ""' in bat and "\r\n" in bat

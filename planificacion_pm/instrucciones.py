@@ -52,5 +52,6 @@ TEXTO = """
 1. Historial y Aceites se pueden filtrar por equipo, editar (doble clic) y exportar a Excel.
 2. «Reparar claves» recalcula las posiciones de ciclo de las PM mayores (se hace solo al editar). «Corregir fechas futuras» quita fechas de ejecución posteriores a hoy (deja nota en Observación).
 3. «Recalcular horas acumuladas» rehace la columna de horas acumuladas al cambio de la tabla Aceites.
-4. Configuración: parámetros, equipos, ciclos, tipos válidos, aceites, consumo por PM, consumo diario, kits y descripciones. «Importar o restaurar datos» reemplaza los datos por los de un libro Excel (.xlsm/.xlsx) o de un respaldo del programa (.db), con respaldo automático previo.
+4. Configuración: parámetros, equipos, ciclos, tipos válidos, aceites, consumo por PM, consumo diario, kits y descripciones. «Importar datos desde Excel (.xlsm)» y «Restaurar respaldo (.db)» reemplazan los datos (con respaldo automático previo).
+5. «Buscar actualizaciones» descarga e instala la última versión publicada; el programa se reinicia solo y los datos se conservan. Al abrir, si hay una versión nueva, se avisa en la barra lateral.
 """
