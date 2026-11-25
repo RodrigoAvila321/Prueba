@@ -560,7 +560,21 @@ class Acciones:
                      f"{fmt_tipo(self.m.p['tarro'])} L.\n\nPresione «Exportar» para generar el Excel de compra.")
         return True
 
-    def definir_semanas(self, s1: str, s_n: str) -> bool:
+    def definir_semanas(self, s1: str, s_n: str, ant1: str = "", ant2: str = "") -> bool:
+        ant1, ant2 = (ant1 or "").strip(), (ant2 or "").strip()
+        a1 = a2 = None
+        if ant1 or ant2:
+            a1, a2 = parse_fecha(ant1), parse_fecha(ant2)
+            if a1 is None or a2 is None:
+                self.ui.aviso("Proyección anterior: ingrese ambas fechas (desde y hasta) con formato dd-mm-aaaa, "
+                              "o deje las dos vacías si no hubo proyección anterior.")
+                return False
+            if a2 < a1:
+                self.ui.aviso("Proyección anterior: la fecha «hasta» debe ser igual o posterior a «desde».")
+                return False
+            if a1 < dt.date(2023, 1, 1):
+                self.ui.aviso("Proyección anterior: la fecha «desde» no puede ser anterior al 01-01-2023.")
+                return False
         d1 = parse_fecha(s1)
         lim = sumar_meses(self.m.hoy, MESES_MAX)
         if d1 is None:
@@ -583,13 +597,21 @@ class Acciones:
                           f"({fmt_fecha(lim)}). Indique menos semanas.")
             return False
         per = self.repo.get_config("periodos", {})
-        per.update(sem_ini=d1.isoformat(), sem_n=n)
+        if a1 and a1 >= d1:
+            self.ui.aviso("La proyección anterior debe comenzar antes de la fecha de inicio de la proyección actual.")
+            return False
+        per.update(sem_ini=d1.isoformat(), sem_n=n, ant_desde=a1.isoformat() if a1 else None,
+                   ant_hasta=a2.isoformat() if a2 else None)
         self.repo.set_config("periodos", per)
         s = self.m.semanas(d1, n)
-        self.ui.info(f"Plazo: {fmt_fecha(d1)} al {fmt_fecha(d2)} ({n} {'semana' if n == 1 else 'semanas'}).\n\n"
-                     f"PM del plazo: {s['n_pm_total']}\nTotal con margen: {fmt_num(s['total_con_margen'])} L  ·  "
-                     f"{s['total_tarros']} tarros de {fmt_tipo(self.m.p['tarro'])} L.\n\n"
-                     "Presione «Exportar» para generar el Excel con el detalle por semana y por PM.")
+        nn = self.m.necesidad_neta(s, a1, a2)
+        txt = (f"Plazo: {fmt_fecha(d1)} al {fmt_fecha(d2)} ({n} {'semana' if n == 1 else 'semanas'}).\n\n"
+               f"PM del plazo: {s['n_pm_total']}\nTotal con margen: {fmt_num(s['total_con_margen'])} L  ·  "
+               f"{s['total_tarros']} tarros de {fmt_tipo(self.m.p['tarro'])} L  ·  ${fmt_num(s['total_valor'])}.")
+        if nn["hay"]:
+            txt += (f"\n\nDescontando la proyección anterior ({fmt_fecha(a1)} al {fmt_fecha(a2)}):\n"
+                    f"Tarros a pedir: {nn['total_tarros']}  ·  ${fmt_num(nn['total_valor'])}.")
+        self.ui.info(txt + "\n\nPresione «Exportar» para generar el Excel con el detalle por semana y por PM.")
         return True
 
 

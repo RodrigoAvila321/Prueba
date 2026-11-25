@@ -113,3 +113,22 @@ def test_versiones_y_script():
     assert not actualizar.es_mas_nueva("v10.1", "10.2")
     bat = actualizar.script_reemplazo(Path("C:/a/nuevo.exe"), Path("C:/a/PlanificacionPM.exe"))
     assert "move /Y" in bat and 'start ""' in bat and "\r\n" in bat
+
+
+def test_precios_y_necesidad_neta(tmp_path):
+    r = _repo(tmp_path)
+    r.set_config("diario", [{"equipo": "X1", "parte": "P9", "lubricante": "Diario", "litros_dia": 20}])
+    r.set_config("precios", [{"parte": "P9", "lubricante": "Diario", "precio": 1000}])
+    hoy = dt.date(2026, 1, 15)
+    m = Motor(r, hoy=hoy)
+    s = m.semanas(dt.date(2026, 1, 15), 1)          # 7 días x 20 L = 140 L + 20 % = 168 L -> 1 tarro
+    f = [x for x in s["filas"] if x["parte"] == "P9"][0]
+    assert f["tarros"] == 1 and f["valor"] == 1000
+    sin = m.necesidad_neta(s, None, None)
+    assert sin["total_tarros"] == 1 and not sin["hay"]
+    # Antes se pidió para 08-01 al 21-01: 14 x 20 = 280 + 20 % = 336 L -> 2 tarros (416 L).
+    # Consumo 08-01 al 14-01 = 140 L -> saldo 276 L >= 168 L -> no hay que pedir.
+    nn = m.necesidad_neta(s, dt.date(2026, 1, 8), dt.date(2026, 1, 21))
+    g = [x for x in nn["filas"] if x["parte"] == "P9"][0]
+    assert (g["tarros_ant"], g["consumo"], g["saldo"], g["tarros"], g["ahorro"]) == (2, 140, 276, 0, 1)
+    assert nn["solape"] == 7 and nn["total_valor"] == 0

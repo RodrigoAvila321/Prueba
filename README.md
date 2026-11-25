@@ -69,6 +69,8 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
 | Hoja **Kits PM**, **Descripciones repuestos**, `ExportarListado` | Pestaña **Kits PM** (**Exportar listado**, edición de kits y descripciones) |
 | Hojas **Lecturas** y **Programación** | Pestaña **Lecturas y programación** |
 | Hoja **Configuración** | Pestaña **Configuración** (parámetros y tablas editables, respaldo, reimportación) |
+| _(nuevo)_ | **Precios por tarro** (Configuración) con Total $ en Compra de aceites y Aceites por semanas |
+| _(nuevo)_ | **Necesidad neta** en Aceites por semanas: descuenta el saldo de la proyección anterior (desde / hasta) |
 | _(nuevo)_ | **Resumen de PM (PDF)**: pregunta Turno A / B y período; PM ejecutadas, cumplimiento en horas y días, aceites y su estado, puntos clave y firmas |
 | `InstalarBotones`, `AjustarSemana`, `IrA…` | Ya no se necesitan (los botones y pestañas son parte del programa) |
 

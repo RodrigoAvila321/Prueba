@@ -11,6 +11,15 @@ from .util import (ORIGEN_NO, es_num, fmt_tipo, mismo_texto, primer_dia_mes, red
 
 N_PROY_EQUIPO = 120     # PM proyectadas por equipo (CalcFlota)
 N_PROY_PANEL = 30       # PM de la hoja Proyección
+PRECIOS_DEFECTO = [  # valor referencial por tarro (CLP)
+    {"parte": "LL-0001", "lubricante": "MOBIL DELVAC MX 15W40", "precio": 641625},
+    {"parte": "LL-0002", "lubricante": "M. LUBE HD PLUS 75W90", "precio": 2867613},
+    {"parte": "LL-0003", "lubricante": "MOBIL SHC RARUS 46", "precio": 2661998},
+    {"parte": "LL-0004", "lubricante": "Mobil DTE 10 EXCEL 46", "precio": 1062549},
+    {"parte": "LL-0005", "lubricante": "Mobil SHC GEAR 320", "precio": 3129668},
+    {"parte": "LL-0006", "lubricante": "MOBIL ALMO 529 (consumo diario)", "precio": 850885},
+    {"parte": "LL-0007", "lubricante": "MOBIL MINING COOLANT 50%", "precio": 562456},
+]
 SEM_MAX = 52
 MESES_MAX = 60
 DIA = dt.timedelta(days=1)
@@ -59,6 +68,8 @@ class Motor:
         self.diario = r.get_config("diario", [])
         self.kits = r.get_config("kits", [])
         self.descripciones = {d["np"]: d["descripcion"] for d in r.get_config("descripciones", [])}
+        self.precios = {str(x["parte"]).strip(): float(x["precio"] or 0)
+                        for x in r.get_config("precios", PRECIOS_DEFECTO) if x.get("parte")}
         self.hist = r.historial()
         self.ac = r.aceites()
         self.lecturas = r.lecturas()
@@ -125,6 +136,10 @@ class Motor:
                 n = d.get("lubricante") or ""
                 return n if "consumo diario" in n.lower() else f"{n} (consumo diario)"
         return ""
+
+    def precio(self, parte: str) -> float:
+        """Valor referencial por tarro."""
+        return self.precios.get(parte, 0.0)
 
     def litros_pm(self, modelo: str, tipo, parte: str) -> float:
         if not es_num(tipo) or int(tipo) not in self.consumo_tipos:
@@ -419,7 +434,8 @@ class Motor:
             tarros = redondear_arriba(conm / tarro) if tarro else 0
             filas.append(dict(parte=pt, nombre=self.nombre_parte(pt), por_eq=por_eq, ejec=e_, proy=p_,
                               total=tot, margen=tot * margen, con_margen=conm, tarros=tarros,
-                              sobrante=tarros * tarro - conm))
+                              sobrante=tarros * tarro - conm, precio=self.precio(pt),
+                              valor=tarros * self.precio(pt)))
         # Sección 3: por año
         anos = []
         n_anos = min(10, fin.year - ini.year + 1)
@@ -473,7 +489,7 @@ class Motor:
                     n_ej_total=sum(n_ej_all.values()), n_pr_total=sum(n_pr.values()),
                     anos=anos, por_equipo=por_equipo, por_modelo=por_modelo,
                     total_con_margen=sum(f["con_margen"] for f in filas),
-                    total_tarros=sum(f["tarros"] for f in filas))
+                    total_tarros=sum(f["tarros"] for f in filas), total_valor=sum(f["valor"] for f in filas))
 
     def texto_tramos(self, d1: dt.date, d2: dt.date) -> str:
         hoy, t = self.hoy, ""
@@ -533,7 +549,8 @@ class Motor:
             conm = tot + tot * margen
             tarros = redondear_arriba(conm / tarro) if tarro else 0
             filas.append(dict(parte=pt, nombre=self.nombre_parte(pt), por_eq=por_eq, total=tot,
-                              margen=tot * margen, con_margen=conm, tarros=tarros, sobrante=tarros * tarro - conm))
+                              margen=tot * margen, con_margen=conm, tarros=tarros, sobrante=tarros * tarro - conm,
+                              precio=self.precio(pt), valor=tarros * self.precio(pt)))
         n_pm = [sum(1 for x in proy if x["equipo"] == eq) + sum(ejec[(eq, w)]["n"] for w in range(1, n + 1))
                 for eq in eqs]
         # Sección 3: semana a semana
@@ -564,7 +581,41 @@ class Motor:
         return dict(ini=ini, n=n, fin=fin, ini_p=ini_p, fin_ej=fin_ej, dias=dias, equipos=eqs, partes=partes,
                     filas=filas, n_pm=n_pm, n_pm_total=sum(n_pm), semanas=semanas, proyectadas=proy,
                     total_con_margen=sum(f["con_margen"] for f in filas),
-                    total_tarros=sum(f["tarros"] for f in filas))
+                    total_tarros=sum(f["tarros"] for f in filas), total_valor=sum(f["valor"] for f in filas))
+
+    def necesidad_neta(self, sem: dict, ant_ini: dt.date | None, ant_fin: dt.date | None) -> dict:
+        """Necesidad del plazo actual descontando el saldo de lo pedido en la proyección anterior.
+
+        Pedido anterior = tarros calculados para [ant_ini, ant_fin] × litros por tarro.
+        Consumo ya ocurrido = litros (sin margen) de [ant_ini, día anterior al inicio actual].
+        Saldo = pedido anterior - consumo (mínimo 0). Necesidad neta = necesidad con margen - saldo."""
+        tarro = float(self.p["tarro"])
+        hay = bool(ant_ini and ant_fin and ant_fin >= ant_ini)
+        prev = self.periodo(ant_ini, ant_fin) if hay else None
+        fin_cons = sem["ini"] - DIA
+        cons = self.periodo(ant_ini, fin_cons) if hay and fin_cons >= ant_ini else None
+        por_parte = lambda r: {f["parte"]: f for f in r["filas"]} if r else {}  # noqa: E731
+        pp, pc = por_parte(prev), por_parte(cons)
+        filas = []
+        for f in sem["filas"]:
+            pt = f["parte"]
+            tar_ant = pp[pt]["tarros"] if pt in pp else 0
+            pedido = tar_ant * tarro
+            consumo = pc[pt]["total"] if pt in pc else 0.0
+            saldo = max(0.0, pedido - consumo)
+            neta = max(0.0, f["con_margen"] - saldo)
+            tarros = redondear_arriba(neta / tarro) if tarro else 0
+            filas.append(dict(parte=pt, nombre=f["nombre"], necesidad=f["con_margen"], tarros_brutos=f["tarros"],
+                              tarros_ant=tar_ant, pedido_ant=pedido, consumo=consumo, saldo=saldo, neta=neta,
+                              tarros=tarros, ahorro=f["tarros"] - tarros, precio=self.precio(pt),
+                              valor=tarros * self.precio(pt), valor_bruto=f["valor"]))
+        solape = 0
+        if hay:
+            solape = max(0, (min(ant_fin, sem["fin"]) - max(ant_ini, sem["ini"])).days + 1)
+        return dict(hay=hay, ant_ini=ant_ini, ant_fin=ant_fin, fin_cons=fin_cons, solape=solape, filas=filas,
+                    total_tarros=sum(f["tarros"] for f in filas), total_valor=sum(f["valor"] for f in filas),
+                    total_bruto=sum(f["valor_bruto"] for f in filas),
+                    total_ahorro=sum(f["ahorro"] for f in filas))
 
     # --------------------------------------------------------- kits a solicitar
     def kits_solicitar(self, per: dict, sem: dict) -> dict:

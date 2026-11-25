@@ -44,9 +44,11 @@ TEXTO = """
 # F. Proyección de aceites, aceites por semanas y kits
 1. «Proyección aceites»: defina Desde / Hasta (dd-mm-aaaa) y presione «Definir período». El tramo anterior a hoy suma las PM ejecutadas del Historial y el tramo desde hoy, las PM proyectadas. LL-0006 se calcula por días calendario × litros por día.
 2. «Exportar» genera un Excel con Resumen, Por equipo, Mes a mes, PM incluidas y Kits a solicitar.
-3. «Aceites por semanas»: fecha de inicio y N° de semanas (1 a 52); «Exportar» genera Resumen, Semana a semana, PM incluidas y Kits a solicitar.
-4. «Kits a solicitar»: kits y repuestos sueltos del período por fechas y del plazo en semanas. Un kit por PM según modelo y tipo; repuestos sueltos = cantidad por PM × N° de PM.
-5. «Kits PM» > «Exportar listado»: listado de repuestos sin duplicados con descripción, ubicación, dónde se usa y cantidad por tipo de PM.
+3. «Aceites por semanas»: ① proyección anterior (desde y hasta, opcional), ② fecha de inicio de la proyección actual y ③ N° de semanas (1 a 52). «Exportar» genera Resumen, Necesidad neta, Semana a semana, PM incluidas y Kits a solicitar.
+4. Necesidad neta: a lo pedido en la proyección anterior (tarros × litros por tarro) se le resta lo consumido desde su inicio hasta el día antes de la proyección actual; ese saldo se descuenta de la necesidad del nuevo plazo, para no volver a pedir aceite que ya estaba cubierto.
+5. Precios: cada lubricante tiene un valor referencial por tarro (Configuración > Precios de lubricantes). Total $ = precio unitario × N° de tarros; aparece en Compra de aceites, Aceites por semanas y sus Excel.
+6. «Kits a solicitar»: kits y repuestos sueltos del período por fechas y del plazo en semanas. Un kit por PM según modelo y tipo; repuestos sueltos = cantidad por PM × N° de PM.
+7. «Kits PM» > «Exportar listado»: listado de repuestos sin duplicados con descripción, ubicación, dónde se usa y cantidad por tipo de PM.
 
 # G. Administración
 1. Historial y Aceites se pueden filtrar por equipo, editar (doble clic) y exportar a Excel.

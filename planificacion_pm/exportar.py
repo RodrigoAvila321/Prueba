@@ -18,6 +18,7 @@ GRIS = "595959"
 FMT_N = "#,##0"
 FMT_GUION = '#,##0;-#,##0;"-"'
 FMT_F = "dd-mm-yyyy"
+FMT_PESOS = '"$"#,##0'
 FLOTA = "FLOTA"
 
 
@@ -170,24 +171,27 @@ def exportar_compra(m: Motor, d1: dt.date, d2: dt.date, ruta: str, usuario: str,
     # ---- Resumen
     _cabecera(ws1, d1, d2, f"COMPRA DE ACEITES · FLOTA {_flota(m)}", m.texto_tramos(d1, d2), m, usuario, origen)
     hdr = ["N° parte", "Lubricante", "Ejecutado (L)", "Proyectado (L)", "Total período (L)",
-           f"Margen {fmt_pct(margen)} (L)", "Total con margen (L)", f"Tarros ({fmt_tipo(tarro)} L)", "Litros sobrantes"]
+           f"Margen {fmt_pct(margen)} (L)", "Total con margen (L)", f"Tarros ({fmt_tipo(tarro)} L)", "Litros sobrantes",
+           "Precio unitario (por tarro)", "Total $ (precio × tarros)"]
     for j, h in enumerate(hdr):
         ws1.cell(7, 1 + j, h)
     for i, f in enumerate(per["filas"]):
         r = 8 + i
         for j, v in enumerate([f["parte"], f["nombre"], f["ejec"], f["proy"], f["total"], f["margen"],
-                               f["con_margen"], f["tarros"], f["sobrante"]]):
+                               f["con_margen"], f["tarros"], f["sobrante"], f["precio"], f["valor"]]):
             ws1.cell(r, 1 + j, v)
     r = 8 + len(per["filas"])
     ws1.cell(r, 1, "TOTAL")
-    for j in range(3, 10):
+    for j in list(range(3, 10)) + [11]:
         ws1.cell(r, j, sum(ws1.cell(k, j).value or 0 for k in range(8, r)))
     ws1.cell(r + 2, 1, f"PM ejecutadas en el período: {per['n_ej_total']}  ·  PM proyectadas: {per['n_pr_total']}"
                        f"  ·  Total: {per['n_ej_total'] + per['n_pr_total']}")
-    formato_tabla(ws1, 7, 1, r, 9, 2)
+    formato_tabla(ws1, 7, 1, r, 11, 2)
     _formato_num(ws1, 8, 3, r, 9, FMT_N)
+    _formato_num(ws1, 8, 10, r, 11, FMT_PESOS)
     _destacar_tarros(ws1, 8, r, 8)
-    _anchos(ws1, {"A": 12, "B": 32, **{get_column_letter(c): 15 for c in range(3, 10)}})
+    _destacar_tarros(ws1, 8, r, 11)
+    _anchos(ws1, {"A": 12, "B": 32, **{get_column_letter(c): 15 for c in range(3, 10)}, "J": 18, "K": 20})
 
     # ---- Por equipo
     eqs = per["equipos"]
@@ -322,6 +326,51 @@ def _f(s):
         return None
 
 
+# ================================================================ necesidad neta
+def escribir_necesidad_neta(ws, m: Motor, s: dict, nn: dict):
+    tarro = fmt_tipo(m.p["tarro"])
+    _titulo(ws, "A1", f"NECESIDAD NETA DE ACEITES · {fmt_fecha(s['ini'])} al {fmt_fecha(s['fin'])} "
+                      f"({s['n']} {'semana' if s['n'] == 1 else 'semanas'})", 13)
+    if nn["hay"]:
+        _nota(ws, "A2", f"① Proyección anterior: {fmt_fecha(nn['ant_ini'])} al {fmt_fecha(nn['ant_fin'])}   ·   "
+              f"② Proyección actual desde el {fmt_fecha(s['ini'])}   ·   ③ {s['n']} semana(s)   ·   "
+              f"{nn['solape']} día(s) en común")
+        _nota(ws, "A3", f"Saldo disponible = tarros pedidos en la proyección anterior × {tarro} L − consumo entre el "
+              f"{fmt_fecha(nn['ant_ini'])} y el {fmt_fecha(nn['fin_cons'])} (PM ejecutadas + proyectadas + consumo diario).")
+        _nota(ws, "A4", f"Necesidad neta = necesidad del plazo con margen − saldo disponible. Tarros a pedir = necesidad "
+              f"neta / {tarro} L, redondeado hacia arriba. Así no se vuelve a pedir lo que ya cubría el pedido anterior.")
+    else:
+        _nota(ws, "A2", "Sin proyección anterior: la necesidad neta es igual a la necesidad del plazo.")
+    hdr = ["N° parte", "Lubricante", "Necesidad del plazo con margen (L)", "Tarros sin descontar",
+           "Tarros pedidos en la proyección anterior", f"Litros pedidos (tarros × {tarro} L)",
+           "Consumo desde la proyección anterior (L)", "Saldo disponible (L)", "Necesidad neta (L)",
+           "Tarros a pedir", "Tarros ahorrados", "Precio unitario (por tarro)", "Total $ (precio × tarros a pedir)"]
+    r0 = 6
+    for j, h in enumerate(hdr):
+        ws.cell(r0, 1 + j, h)
+    for i, f in enumerate(nn["filas"]):
+        vals = [f["parte"], f["nombre"], f["necesidad"], f["tarros_brutos"], f["tarros_ant"], f["pedido_ant"],
+                f["consumo"], f["saldo"], f["neta"], f["tarros"], f["ahorro"], f["precio"], f["valor"]]
+        for j, v in enumerate(vals):
+            ws.cell(r0 + 1 + i, 1 + j, v)
+    r = r0 + 1 + len(nn["filas"])
+    ws.cell(r, 1, "TOTAL")
+    for j in range(3, 14):
+        if j != 12:
+            ws.cell(r, j, sum(ws.cell(k, j).value or 0 for k in range(r0 + 1, r)))
+    formato_tabla(ws, r0, 1, r, 13)
+    ws.row_dimensions[r0].height = 46
+    _formato_num(ws, r0 + 1, 3, r, 11, FMT_N)
+    _formato_num(ws, r0 + 1, 12, r, 13, FMT_PESOS)
+    _destacar_tarros(ws, r0 + 1, r, 10)
+    _destacar_tarros(ws, r0 + 1, r, 13)
+    _nota(ws, f"A{r + 2}", f"Sin descontar: {sum(f['tarros_brutos'] for f in nn['filas'])} tarros · "
+          f"${nn['total_bruto']:,.0f}".replace(",", ".") + f"   ·   Con descuento: {nn['total_tarros']} tarros · "
+          f"${nn['total_valor']:,.0f}".replace(",", ".") + f"   ·   Ahorro: {nn['total_ahorro']} tarro(s) · "
+          f"${nn['total_bruto'] - nn['total_valor']:,.0f}".replace(",", "."), color="000000")
+    _anchos(ws, {"A": 12, "B": 32, **{get_column_letter(c): 15 for c in range(3, 12)}, "L": 18, "M": 22})
+
+
 # ================================================================ aceites por semanas
 def exportar_semanas(m: Motor, ini: dt.date, n: int, ruta: str, usuario: str, origen: str) -> dict:
     s = m.semanas(ini, n)
@@ -341,28 +390,39 @@ def exportar_semanas(m: Motor, ini: dt.date, n: int, ruta: str, usuario: str, or
                  + " suma su consumo diario por cada día del plazo." if diarias else "."),
               m, usuario, origen, extra=f"Plazo: {fmt_fecha(d1)} al {fmt_fecha(d2)} ({sem_txt}, {7 * n} días)")
     hdr = ["N° parte", "Lubricante", *eqs, "Total plazo (L)", f"Margen {fmt_pct(margen)} (L)", "Total con margen (L)",
-           f"Tarros ({fmt_tipo(tarro)} L)", "Litros sobrantes"]
+           f"Tarros ({fmt_tipo(tarro)} L)", "Litros sobrantes", "Precio unitario (por tarro)",
+           "Total $ (precio × tarros)"]
     for j, h in enumerate(hdr):
         ws1.cell(7, 1 + j, h)
     for i, f in enumerate(s["filas"]):
         r = 8 + i
         vals = [f["parte"], f["nombre"], *f["por_eq"], f["total"], f["margen"], f["con_margen"], f["tarros"],
-                f["sobrante"]]
+                f["sobrante"], f["precio"], f["valor"]]
         for j, v in enumerate(vals):
             ws1.cell(r, 1 + j, v)
     r = 8 + nL
     nc = len(hdr)
     ws1.cell(r, 1, "TOTAL")
     for j in range(3, nc + 1):
-        ws1.cell(r, j, sum(ws1.cell(k, j).value or 0 for k in range(8, r)))
+        if j != nc - 1:
+            ws1.cell(r, j, sum(ws1.cell(k, j).value or 0 for k in range(8, r)))
     ws1.cell(r + 1, 2, "N° de PM proyectadas")
     for j, v in enumerate(s["n_pm"]):
         ws1.cell(r + 1, 3 + j, v)
     ws1.cell(r + 1, 3 + nE, s["n_pm_total"])
     formato_tabla(ws1, 7, 1, r + 1, nc, 2)
-    _formato_num(ws1, 8, 3, r + 1, nc, FMT_N)
-    _destacar_tarros(ws1, 8, r, nc - 1)
-    _anchos(ws1, {"A": 12, "B": 32, **{get_column_letter(c): 14 for c in range(3, nc + 1)}})
+    _formato_num(ws1, 8, 3, r + 1, nc - 2, FMT_N)
+    _formato_num(ws1, 8, nc - 1, r, nc, FMT_PESOS)
+    _destacar_tarros(ws1, 8, r, nc - 3)
+    _destacar_tarros(ws1, 8, r, nc)
+    _anchos(ws1, {"A": 12, "B": 32, **{get_column_letter(c): 14 for c in range(3, nc + 1)},
+                  get_column_letter(nc - 1): 18, get_column_letter(nc): 20})
+
+    # ---- Necesidad neta (descontando la proyección anterior)
+    per_cfg = m.repo.get_config("periodos", {})
+    a1, a2 = _f(per_cfg.get("ant_desde")), _f(per_cfg.get("ant_hasta"))
+    nn = m.necesidad_neta(s, a1, a2)
+    escribir_necesidad_neta(wb.create_sheet("Necesidad neta", 1), m, s, nn)
 
     # ---- Semana a semana
     _titulo(ws2, "A1", f"SEMANA A SEMANA (litros sin margen) · {fmt_fecha(d1)} al {fmt_fecha(d2)}", 13)

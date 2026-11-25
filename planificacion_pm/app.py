@@ -15,12 +15,16 @@ from . import TITULO, __version__, actualizar, exportar, resumen_pdf, tema
 from .acciones import Acciones
 from .db import PARAMS_DEF, Repositorio
 from .importar import extraer_hoja, importar_libro
-from .motor import Motor
+from .motor import PRECIOS_DEFECTO, Motor
 from .util import es_num, fmt_fecha, fmt_fechahora, fmt_num, fmt_pct, fmt_tipo, parse_num
 from .widgets import (AZUL, NARANJA, ROJO, VERDE, Desplazable, DialogoFila, DialogoTexto, DialogoVarios,
                       EditorTabla, DialogoResumen, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
 
 NOMBRE_DB = "PlanificacionPM_datos.db"
+
+
+def _pesos(x) -> str:
+    return f"${fmt_num(x)}" if es_num(x) else ""
 
 
 def carpeta_datos() -> Path:
@@ -1021,6 +1025,11 @@ class App(tk.Tk):
         f = lambda s: dt.date.fromisoformat(s) if s else None  # noqa: E731
         return f(per.get("desde")), f(per.get("hasta")), f(per.get("sem_ini")), per.get("sem_n") or 4
 
+    def _ant_actual(self):
+        per = self.repo.get_config("periodos", {})
+        f = lambda s: dt.date.fromisoformat(s) if s else None  # noqa: E731
+        return f(per.get("ant_desde")), f(per.get("ant_hasta"))
+
     def _reemplazar_tabla(self, marco, columnas, filas, tags=None, height=None):
         for w in marco.winfo_children():
             w.destroy()
@@ -1041,17 +1050,18 @@ class App(tk.Tk):
         self.s_pa2.configure(text=f"2. COMPRA DEL PERÍODO {fmt_fecha(per['ini'])} AL {fmt_fecha(per['fin'])} · "
                                   "FLOTA COMPLETA (litros)")
         eqs = per["equipos"]
-        cols = [("p", "N° parte", 70, "w"), ("n", "Lubricante", 220, "w"), *[(f"q{i}", e, 70, "center")
+        cols = [("p", "N° parte", 68, "w"), ("n", "Lubricante", 200, "w"), *[(f"q{i}", e, 52, "center")
                                                                             for i, e in enumerate(eqs)],
-                ("ej", "Ejecutado (L)", 90, "center"), ("pr", "Proyectado (L)", 95, "center"),
-                ("t", "Total período (L)", 105, "center"), ("mg", f"Margen {fmt_pct(m.p['margen'])} (L)", 90, "center"),
-                ("cm", "Total con margen (L)", 120, "center"), ("ta", f"Tarros ({fmt_tipo(m.p['tarro'])} L)", 100, "center"),
-                ("so", "Litros sobrantes", 110, "center")]
+                ("ej", "Ejecutado (L)", 88, "center"), ("pr", "Proyectado (L)", 92, "center"),
+                ("t", "Total (L)", 70, "center"), ("mg", f"Margen {fmt_pct(m.p['margen'])}", 82, "center"),
+                ("cm", "Con margen (L)", 98, "center"), ("ta", f"Tarros ({fmt_tipo(m.p['tarro'])} L)", 88, "center"),
+                ("so", "Sobrante (L)", 82, "center"), ("pu", "Precio unitario", 100, "center"),
+                ("vt", "Total $", 110, "center")]
         filas = [[f["parte"], f["nombre"], *f["por_eq"], f["ejec"], f["proy"], f["total"], f["margen"], f["con_margen"],
-                  f["tarros"], f["sobrante"]] for f in per["filas"]]
-        tot = ["TOTAL", ""] + [sum(r[i] for r in filas) for i in range(2, len(cols))]
+                  f["tarros"], f["sobrante"], _pesos(f["precio"]), _pesos(f["valor"])] for f in per["filas"]]
+        tot = ["TOTAL", ""] + [sum(r[i] for r in filas) for i in range(2, len(cols) - 2)] + ["", _pesos(per["total_valor"])]
         npm = ["", "N° de PM", *per["n_pm"], per["n_ej_total"], per["n_pr_total"], per["n_ej_total"] + per["n_pr_total"],
-               "", "", "", ""]
+               "", "", "", "", "", ""]
         self._reemplazar_tabla(self.pa2_marco, cols, filas + [tot, npm], [""] * len(filas) + ["total", "total"])
         partes = per["partes"]
         cols = [("a", "Año", 70, "w"), ("e", "PM ejecutadas", 100, "center"), ("p", "PM proyectadas", 105, "center"),
@@ -1129,19 +1139,34 @@ class App(tk.Tk):
         s1.pack(fill="x", pady=6, padx=6)
         self.var_sini = tk.StringVar()
         self.var_sn = tk.StringVar()
-        ttk.Label(s1, text="Fecha de inicio (dd-mm-aaaa)").grid(row=0, column=0, sticky="w")
-        ttk.Entry(s1, textvariable=self.var_sini, width=12).grid(row=0, column=1, padx=4)
-        ttk.Label(s1, text="N° de semanas (1 a 52)").grid(row=1, column=0, sticky="w")
-        ttk.Entry(s1, textvariable=self.var_sn, width=6).grid(row=1, column=1, padx=4, sticky="w")
-        self._boton(s1, "Calcular", self._calcular_semanas).grid(row=0, column=2, rowspan=2, padx=6)
-        self._boton(s1, "Exportar", self._exportar_semanas, "Verde").grid(row=0, column=3, rowspan=2, padx=6)
-        self._boton(s1, "Kits a solicitar", lambda: self.nb.select(self.tabs["Kits a solicitar"]), "Morado"
-                    ).grid(row=0, column=4, rowspan=2, padx=6)
+        self.var_ant1 = tk.StringVar()
+        self.var_ant2 = tk.StringVar()
+        cajas = ttk.Frame(s1)
+        cajas.grid(row=0, column=0, rowspan=2, sticky="w")
+        for col, (tit, campos) in enumerate((
+                ("① Proyección anterior (opcional)", (("Desde", self.var_ant1, 12), ("Hasta", self.var_ant2, 12))),
+                ("② Proyección actual", (("Fecha de inicio", self.var_sini, 12),)),
+                ("③ Semanas a proyectar", (("N° de semanas (1 a 52)", self.var_sn, 6),)))):
+            c = tk.Frame(cajas, background="#F4F7FA", highlightthickness=1, highlightbackground=tema.BORDE,
+                         padx=12, pady=8)
+            c.grid(row=0, column=col, sticky="nsw", padx=(0, 10))
+            tk.Label(c, text=tit, background="#F4F7FA", foreground=tema.NAVY, font=(tema.FUENTE, 9, "bold")
+                     ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            for i, (lbl, var, ancho) in enumerate(campos, start=1):
+                tk.Label(c, text=lbl, background="#F4F7FA", foreground=tema.SUAVE).grid(row=i, column=0, sticky="w")
+                ttk.Entry(c, textvariable=var, width=ancho).grid(row=i, column=1, sticky="w", padx=(8, 0), pady=2)
+        b = ttk.Frame(s1)
+        b.grid(row=0, column=1, rowspan=2, sticky="w", padx=6)
+        self._boton(b, "Calcular", self._calcular_semanas).pack(side="left", padx=4)
+        self._boton(b, "Exportar", self._exportar_semanas, "Verde").pack(side="left", padx=4)
+        self._boton(b, "Kits a solicitar", lambda: self.nb.select(self.tabs["Kits a solicitar"]), "Morado"
+                    ).pack(side="left", padx=4)
         self.lbl_sem = ttk.Label(s1, text="", style="Nota.TLabel")
-        self.lbl_sem.grid(row=0, column=5, rowspan=2, padx=12, sticky="w")
-        ttk.Label(s1, text="Desde el 01-01-2023. Hasta hoy se cuentan las PM ejecutadas (Historial); desde hoy, las "
-                           "proyectadas. Cada semana son 7 días desde la fecha de inicio.", style="Nota.TLabel"
-                  ).grid(row=2, column=0, columnspan=6, sticky="w", pady=(6, 0))
+        self.lbl_sem.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Label(s1, text="Fechas dd-mm-aaaa, desde el 01-01-2023. Hasta hoy se cuentan las PM ejecutadas (Historial); "
+                           "desde hoy, las proyectadas. Cada semana son 7 días desde la fecha de inicio. La proyección "
+                           "anterior se usa para descontar lo ya pedido (sección 4); déjela vacía si no hubo.",
+                  style="Nota.TLabel", wraplength=1150).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.s_sw2 = self._seccion(p, "2. ACEITES DEL PLAZO")
         self.s_sw2.pack(fill="x", pady=6, padx=6)
         self.sw2_marco = ttk.Frame(self.s_sw2)
@@ -1151,6 +1176,12 @@ class App(tk.Tk):
         s3.pack(fill="x", pady=6, padx=6)
         self.sw3_marco = ttk.Frame(s3)
         self.sw3_marco.pack(fill="x")
+        self.s_sw4 = self._seccion(p, "4. NECESIDAD NETA · descontando la proyección anterior", "litros")
+        self.s_sw4.pack(fill="x", pady=6, padx=6)
+        self.lbl_sw4 = ttk.Label(self.s_sw4, text="", style="Nota.TLabel", wraplength=1150, justify="left")
+        self.lbl_sw4.pack(anchor="w", pady=(0, 6))
+        self.sw4_marco = ttk.Frame(self.s_sw4)
+        self.sw4_marco.pack(fill="x")
 
     def _refrescar_semanas(self):
         _, _, ini, n = self._periodo_actual()
@@ -1164,14 +1195,15 @@ class App(tk.Tk):
         eqs = s["equipos"]
         self.s_sw2.configure(text=f"2. ACEITES DEL PLAZO {fmt_fecha(s['ini'])} AL {fmt_fecha(s['fin'])} "
                                   "(PM ejecutadas hasta hoy + proyectadas)")
-        cols = [("p", "N° parte", 70, "w"), ("n", "Lubricante", 220, "w"),
-                *[(f"q{i}", e, 75, "center") for i, e in enumerate(eqs)], ("t", "Total plazo (L)", 100, "center"),
-                ("mg", f"Margen {fmt_pct(m.p['margen'])} (L)", 90, "center"), ("cm", "Total con margen (L)", 120, "center"),
-                ("ta", f"Tarros ({fmt_tipo(m.p['tarro'])} L)", 90, "center"), ("so", "Litros sobrantes", 100, "center")]
+        cols = [("p", "N° parte", 68, "w"), ("n", "Lubricante", 205, "w"),
+                *[(f"q{i}", e, 55, "center") for i, e in enumerate(eqs)], ("t", "Total (L)", 75, "center"),
+                ("mg", f"Margen {fmt_pct(m.p['margen'])}", 85, "center"), ("cm", "Con margen (L)", 100, "center"),
+                ("ta", f"Tarros ({fmt_tipo(m.p['tarro'])} L)", 90, "center"), ("so", "Sobrante (L)", 85, "center"),
+                ("pu", "Precio unitario", 100, "center"), ("vt", "Total $", 110, "center")]
         filas = [[f["parte"], f["nombre"], *f["por_eq"], f["total"], f["margen"], f["con_margen"], f["tarros"],
-                  f["sobrante"]] for f in s["filas"]]
-        tot = ["TOTAL", ""] + [sum(r[i] for r in filas) for i in range(2, len(cols))]
-        npm = ["", "N° de PM", *s["n_pm"], s["n_pm_total"], "", "", "", ""]
+                  f["sobrante"], _pesos(f["precio"]), _pesos(f["valor"])] for f in s["filas"]]
+        tot = ["TOTAL", ""] + [sum(r[i] for r in filas) for i in range(2, len(cols) - 2)] + ["", _pesos(s["total_valor"])]
+        npm = ["", "N° de PM", *s["n_pm"], s["n_pm_total"], "", "", "", "", "", ""]
         self._reemplazar_tabla(self.sw2_marco, cols, filas + [tot, npm], [""] * len(filas) + ["total", "total"])
         partes = s["partes"]
         cols = [("s", "Semana", 60, "center"), ("p", "Período", 150, "w"), ("i", "Sem. ISO", 70, "center"),
@@ -1185,9 +1217,43 @@ class App(tk.Tk):
                           w["total"]])
         self._reemplazar_tabla(self.sw3_marco, cols, filas, ["total"] + [""] * len(s["semanas"]),
                                height=min(len(filas), 30))
+        self._refrescar_neta(s)
+
+    def _refrescar_neta(self, s):
+        a1, a2 = self._ant_actual()
+        self.var_ant1.set(fmt_fecha(a1))
+        self.var_ant2.set(fmt_fecha(a2))
+        nn = self.m.necesidad_neta(s, a1, a2)
+        tarro = fmt_tipo(self.m.p["tarro"])
+        if nn["hay"]:
+            txt = (f"Proyección anterior {fmt_fecha(a1)} al {fmt_fecha(a2)} · proyección actual {fmt_fecha(s['ini'])} al "
+                   f"{fmt_fecha(s['fin'])} ({nn['solape']} día(s) en común). Saldo = tarros pedidos antes × {tarro} L − "
+                   f"consumo entre el {fmt_fecha(a1)} y el {fmt_fecha(nn['fin_cons'])}. Tarros a pedir = (necesidad con "
+                   f"margen − saldo) / {tarro} L. Se ahorran {nn['total_ahorro']} tarro(s) respecto del cálculo sin "
+                   "descontar.")
+        else:
+            txt = ("Sin proyección anterior: la necesidad neta es igual a la del plazo. Escriba las fechas en "
+                   "«① Proyección anterior» y presione «Calcular» para descontar lo ya pedido.")
+        self.lbl_sw4.configure(text=txt)
+        cols = [("p", "N° parte", 68, "w"), ("n", "Lubricante", 205, "w"),
+                ("ne", "Necesidad (L)", 95, "center"), ("tb", "Tarros brutos", 92, "center"),
+                ("ta", "Tarros pedidos antes", 130, "center"), ("co", "Consumo desde entonces (L)", 170, "center"),
+                ("sa", "Saldo (L)", 80, "center"), ("nn", "Neta (L)", 75, "center"),
+                ("tp", "Tarros a pedir", 98, "center"), ("pu", "Precio unitario", 100, "center"),
+                ("vt", "Total $", 110, "center")]
+        filas, tags = [], []
+        for f in nn["filas"]:
+            filas.append([f["parte"], f["nombre"], f["necesidad"], f["tarros_brutos"], f["tarros_ant"], f["consumo"],
+                          f["saldo"], f["neta"], f["tarros"], _pesos(f["precio"]), _pesos(f["valor"])])
+            tags.append("verde" if f["ahorro"] > 0 else "")
+        filas.append(["TOTAL", "", sum(f["necesidad"] for f in nn["filas"]),
+                      sum(f["tarros_brutos"] for f in nn["filas"]), sum(f["tarros_ant"] for f in nn["filas"]),
+                      sum(f["consumo"] for f in nn["filas"]), sum(f["saldo"] for f in nn["filas"]),
+                      sum(f["neta"] for f in nn["filas"]), nn["total_tarros"], "", _pesos(nn["total_valor"])])
+        self._reemplazar_tabla(self.sw4_marco, cols, filas, tags + ["total"])
 
     def _calcular_semanas(self):
-        if self.acc.definir_semanas(self.var_sini.get(), self.var_sn.get()):
+        if self.acc.definir_semanas(self.var_sini.get(), self.var_sn.get(), self.var_ant1.get(), self.var_ant2.get()):
             self.refrescar()
 
     def _exportar_semanas(self):
@@ -1386,6 +1452,10 @@ class App(tk.Tk):
               ("parte", "N° parte", "txt", 70), ("litros", "Litros", "num", 60)]
              + [(str(t), str(t), "num", 50) for t in self.m.consumo_tipos],
              "Marque 1 en los tipos de PM que consumen el lubricante; 0 o vacío = no consume."),
+            ("precios", "Precios de lubricantes (por tarro)",
+             [("parte", "N° parte", "txt", 80), ("lubricante", "Lubricante", "txt", 240),
+              ("precio", "Valor referencial por tarro ($)", "num", 160)],
+             "Precio unitario por tarro. Total = precio unitario × N° de tarros."),
             ("diario", "Consumo diario por equipo",
              [("equipo", "Equipo", "txt", 70), ("parte", "N° parte", "txt", 80), ("lubricante", "Lubricante", "txt", 200),
               ("litros_dia", "Litros por día", "num", 90)],
@@ -1447,7 +1517,8 @@ class App(tk.Tk):
             if clave in ("ciclos", "equipos"):
                 self.acc.reparar_claves(silencioso=True)
             self.refrescar()
-        EditorTabla(self, titulo, cols, self.repo.get_config(clave, []), guardar, nota)
+        defecto = PRECIOS_DEFECTO if clave == "precios" else []
+        EditorTabla(self, titulo, cols, self.repo.get_config(clave, defecto), guardar, nota)
 
     def _respaldar(self):
         ruta = filedialog.asksaveasfilename(parent=self, title="Respaldar base de datos",
