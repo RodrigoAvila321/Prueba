@@ -132,3 +132,13 @@ def test_precios_y_necesidad_neta(tmp_path):
     g = [x for x in nn["filas"] if x["parte"] == "P9"][0]
     assert (g["tarros_ant"], g["consumo"], g["saldo"], g["tarros"], g["ahorro"]) == (2, 140, 276, 0, 1)
     assert nn["solape"] == 7 and nn["total_valor"] == 0
+
+
+def test_entorno_limpio_para_reiniciar():
+    from planificacion_pm import actualizar
+    env = actualizar.entorno_limpio({"PATH": "x", "_PYI_APPLICATION_HOME_DIR": "C:/t/_MEI1",
+                                     "_PYI_PARENT_PROCESS_LEVEL": "1", "_MEIPASS2": "C:/t/_MEI1"})
+    assert env == {"PATH": "x", "PYINSTALLER_RESET_ENVIRONMENT": "1"}
+    from pathlib import Path
+    bat = actualizar.script_reemplazo(Path("C:/a/n.exe"), Path("C:/a/p.exe"))
+    assert "set PYINSTALLER_RESET_ENVIRONMENT=1" in bat and "set _PYI_APPLICATION_HOME_DIR=" in bat

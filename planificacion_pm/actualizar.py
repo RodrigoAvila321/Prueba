@@ -80,6 +80,12 @@ def script_reemplazo(nuevo: Path, actual: Path) -> str:
     """Script .bat: reintenta el reemplazo hasta que el .exe en uso se libere y luego lo abre."""
     return "\r\n".join([
         "@echo off",
+        "set PYINSTALLER_RESET_ENVIRONMENT=1",
+        "set _PYI_APPLICATION_HOME_DIR=",
+        "set _PYI_ARCHIVE_FILE=",
+        "set _PYI_PARENT_PROCESS_LEVEL=",
+        "set _PYI_SPLASH_IPC=",
+        "set _MEIPASS2=",
         "set /a n=0",
         ":reintentar",
         f'move /Y "{nuevo}" "{actual}" >nul 2>&1',
@@ -99,9 +105,23 @@ def script_reemplazo(nuevo: Path, actual: Path) -> str:
     ])
 
 
+def entorno_limpio(base: dict | None = None) -> dict:
+    """Variables de entorno para abrir otro .exe de PyInstaller sin heredar las de este proceso.
+
+    Si el programa nuevo hereda las variables internas de PyInstaller (_PYI_*, _MEIPASS2), cree ser un
+    subproceso del actual y busca python3xx.dll en la carpeta temporal _MEIxxxx de este, que se borra al
+    cerrarse -> «Failed to load Python DLL». PYINSTALLER_RESET_ENVIRONMENT=1 hace que arranque limpio."""
+    env = dict(os.environ if base is None else base)
+    for k in list(env):
+        if k.upper().startswith("_PYI_") or k.upper() in ("_MEIPASS2", "_PYIBOOT_SPLASH"):
+            del env[k]
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return env
+
+
 def instalar_y_reiniciar(nuevo: Path, actual: Path):
     """Lanza el script de reemplazo (proceso independiente). El llamador debe cerrar el programa enseguida."""
     bat = Path(tempfile.gettempdir()) / "PlanificacionPM_actualizar.bat"
     bat.write_text(script_reemplazo(nuevo, actual), encoding="mbcs" if sys.platform.startswith("win") else "utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True)
+    subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True, env=entorno_limpio())
