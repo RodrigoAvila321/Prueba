@@ -142,6 +142,7 @@ def test_entorno_limpio_para_reiniciar():
     from pathlib import Path
     bat = actualizar.script_reemplazo(Path("C:/a/n.exe"), Path("C:/a/p.exe"))
     assert "set PYINSTALLER_RESET_ENVIRONMENT=1" in bat and "set _PYI_APPLICATION_HOME_DIR=" in bat
+    assert 'start "" "%SystemRoot%\\explorer.exe" "C:\\a\\p.exe"' in bat.replace("/", "\\")
 
 
 def test_inventario_manual_y_reporte_horas(tmp_path):

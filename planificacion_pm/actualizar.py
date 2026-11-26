@@ -77,7 +77,10 @@ def descargar(url: str, destino: Path, progreso=None, timeout: float = 30.0):
 
 
 def script_reemplazo(nuevo: Path, actual: Path) -> str:
-    """Script .bat: reintenta el reemplazo hasta que el .exe en uso se libere y luego lo abre."""
+    """Script .bat: reintenta el reemplazo hasta que el .exe en uso se libere y luego lo abre.
+
+    El programa nuevo se abre a través del Explorador de Windows (como un doble clic del usuario): así es
+    hijo del escritorio y no hereda nada del proceso que se cerró (variables _PYI_*, carpeta _MEI, ruta de DLL)."""
     return "\r\n".join([
         "@echo off",
         "set PYINSTALLER_RESET_ENVIRONMENT=1",
@@ -95,11 +98,13 @@ def script_reemplazo(nuevo: Path, actual: Path) -> str:
         "ping -n 2 127.0.0.1 >nul",
         "goto reintentar",
         ":listo",
-        f'start "" "{actual}"',
+        "ping -n 2 127.0.0.1 >nul",
+        f'start "" "%SystemRoot%\\explorer.exe" "{actual}"',
         'del "%~f0"',
         "exit /b 0",
         ":fallo",
-        f'start "" "{actual}"',
+        "ping -n 2 127.0.0.1 >nul",
+        f'start "" "%SystemRoot%\\explorer.exe" "{actual}"',
         'del "%~f0"',
         "",
     ])
@@ -124,4 +129,10 @@ def instalar_y_reiniciar(nuevo: Path, actual: Path):
     bat = Path(tempfile.gettempdir()) / "PlanificacionPM_actualizar.bat"
     bat.write_text(script_reemplazo(nuevo, actual), encoding="mbcs" if sys.platform.startswith("win") else "utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if sys.platform.startswith("win"):
+        try:  # PyInstaller fija la ruta de DLL en su carpeta _MEI; no debe heredarla el proceso nuevo
+            import ctypes
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        except Exception:
+            pass
     subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True, env=entorno_limpio())
