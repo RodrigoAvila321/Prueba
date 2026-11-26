@@ -254,12 +254,8 @@ def _bloque_pm(p, intervalo):
     return KeepTogether(partes + [Spacer(1, 10)])
 
 
-def exportar_resumen_pdf(m: Motor, d1: dt.date, d2: dt.date, turno: str, ruta: str, usuario: str) -> dict:
-    r = datos_resumen(m, d1, d2)
-    from .tema import dibujar  # import diferido: usa Pillow
-    logo = ImageReader(dibujar("logo").resize((128, 128)))
-    emitido = dt.datetime.now()
-
+def marco_pagina(titulo, subtitulo, pie, usuario, emitido, logo):
+    """Encabezado oscuro con logo, franja de seguridad y pie de página (común a los reportes PDF)."""
     def pagina(c, doc):
         w, h = letter
         c.saveState()
@@ -268,16 +264,15 @@ def exportar_resumen_pdf(m: Motor, d1: dt.date, d2: dt.date, turno: str, ruta: s
         c.drawImage(logo, 15 * mm, h - 58, 44, 44, mask="auto")
         c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(15 * mm + 54, h - 33, "RESUMEN DE MANTENCIONES PREVENTIVAS")
+        c.drawString(15 * mm + 54, h - 33, titulo)
         c.setFillColor(ACENTO)
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(15 * mm + 54, h - 50, f"{turno.upper()}  ·  {fmt_fecha(d1)} al {fmt_fecha(d2)}")
+        c.drawString(15 * mm + 54, h - 50, subtitulo)
         c.setFillColor(colors.HexColor("#C5D0DE"))
         c.setFont("Helvetica", 8)
         c.drawRightString(w - 15 * mm, h - 30, f"Emitido el {emitido:%d-%m-%Y %H:%M}")
         c.drawRightString(w - 15 * mm, h - 42, f"por {usuario}")
         c.drawRightString(w - 15 * mm, h - 54, "Equipos de perforación")
-        # franja de seguridad
         c.setFillColor(AMARILLO)
         c.rect(0, h - 77, w, 7, stroke=0, fill=1)
         c.setFillColor(colors.HexColor("#222831"))
@@ -291,14 +286,25 @@ def exportar_resumen_pdf(m: Motor, d1: dt.date, d2: dt.date, turno: str, ruta: s
             p.close()
             c.drawPath(p, stroke=0, fill=1)
             x += 18
-        # pie
         c.setStrokeColor(BORDE)
         c.line(15 * mm, 30, w - 15 * mm, 30)
         c.setFillColor(SUAVE)
         c.setFont("Helvetica", 7.5)
-        c.drawString(15 * mm, 18, f"Planificación PM · Resumen {turno} · {fmt_fecha(d1)} al {fmt_fecha(d2)}")
+        c.drawString(15 * mm, 18, pie)
         c.drawRightString(w - 15 * mm, 18, f"Página {doc.page}")
         c.restoreState()
+    return pagina
+
+
+def exportar_resumen_pdf(m: Motor, d1: dt.date, d2: dt.date, turno: str, ruta: str, usuario: str) -> dict:
+    r = datos_resumen(m, d1, d2)
+    from .tema import dibujar  # import diferido: usa Pillow
+    logo = ImageReader(dibujar("logo").resize((128, 128)))
+    emitido = dt.datetime.now()
+
+    pagina = marco_pagina("RESUMEN DE MANTENCIONES PREVENTIVAS",
+                          f"{turno.upper()}  ·  {fmt_fecha(d1)} al {fmt_fecha(d2)}",
+                          f"Planificación PM · Resumen {turno} · {fmt_fecha(d1)} al {fmt_fecha(d2)}", usuario, emitido, logo)
 
     doc = SimpleDocTemplate(ruta, pagesize=letter, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=95,
                             bottomMargin=45, title=f"Resumen de PM {turno}", author=usuario,

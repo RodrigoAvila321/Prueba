@@ -11,14 +11,14 @@ from tkinter import filedialog, messagebox, ttk
 
 import openpyxl
 
-from . import TITULO, __version__, actualizar, exportar, resumen_pdf, tema
+from . import TITULO, __version__, actualizar, exportar, reporte_horas, resumen_pdf, tema
 from .acciones import Acciones
 from .db import PARAMS_DEF, Repositorio
 from .importar import extraer_hoja, importar_libro
 from .motor import PRECIOS_DEFECTO, Motor
 from .util import es_num, fmt_fecha, fmt_fechahora, fmt_num, fmt_pct, fmt_tipo, parse_num
 from .widgets import (AZUL, NARANJA, ROJO, VERDE, Desplazable, DialogoFila, DialogoTexto, DialogoVarios,
-                      EditorTabla, DialogoResumen, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
+                      EditorTabla, DialogoEquipos, DialogoResumen, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
 
 NOMBRE_DB = "PlanificacionPM_datos.db"
 
@@ -458,6 +458,7 @@ class App(tk.Tk):
         self.var_fprog = tk.StringVar()
         ttk.Entry(fp, textvariable=self.var_fprog, width=12).pack(side="left", padx=6)
         self._boton(fp, "Programar PM", self._programar).pack(side="left")
+        self._boton(fp, "Reporte horas a PM (PDF)", self._reporte_horas, "Naranja").pack(side="left", padx=6)
         self.lbl_nota_prog = ttk.Label(s1, text="", style="Nota.TLabel", wraplength=430)
         self.lbl_nota_prog.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
@@ -1167,6 +1168,36 @@ class App(tk.Tk):
                            "desde hoy, las proyectadas. Cada semana son 7 días desde la fecha de inicio. La proyección "
                            "anterior se usa para descontar lo ya pedido (sección 4); déjela vacía si no hubo.",
                   style="Nota.TLabel", wraplength=1150).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        si = self._seccion(p, "INVENTARIO Y PEDIDOS (opcional) · se descuentan de lo que hay que pedir", "litros")
+        si.pack(fill="x", pady=6, padx=6)
+        ttk.Label(si, text="Escriba lo que tiene en bodega (litros), lo solicitado que aún no llega (tarros) y lo que "
+                           "viene en tránsito a faena (tarros). Si deja todo vacío, se usa la proyección anterior (①). "
+                           "Presione «Calcular» para aplicar.", style="Nota.TLabel", wraplength=1150
+                  ).grid(row=0, column=0, columnspan=6, sticky="w", pady=(0, 6))
+        for j, h in enumerate(("N° parte", "Lubricante", "Stock en bodega (L)", "Solicitado pendiente (tarros)",
+                               "En tránsito a faena (tarros)")):
+            tk.Label(si, text=h, background=tema.NAVY2, foreground="#FFFFFF", font=(tema.FUENTE, 9, "bold"),
+                     padx=8, pady=5, anchor="w").grid(row=1, column=j, sticky="ew")
+        self.vars_inv = {}
+        for i, pt in enumerate(self.m.partes(), start=2):
+            bg = "#F5F8FB" if i % 2 else tema.TARJETA
+            tk.Label(si, text=pt, background=bg, padx=8, anchor="w").grid(row=i, column=0, sticky="nsew")
+            tk.Label(si, text=self.m.nombre_parte(pt), background=bg, padx=8, anchor="w").grid(row=i, column=1,
+                                                                                               sticky="nsew")
+            vs = []
+            for j in range(3):
+                v = tk.StringVar()
+                c = tk.Frame(si, background=bg, padx=8, pady=2)
+                c.grid(row=i, column=2 + j, sticky="nsew")
+                ttk.Entry(c, textvariable=v, width=12, justify="center").pack(anchor="w")
+                vs.append(v)
+            self.vars_inv[pt] = vs
+        bi = ttk.Frame(si)
+        bi.grid(row=2 + len(self.vars_inv), column=0, columnspan=5, sticky="w", pady=(8, 0))
+        self._boton(bi, "Calcular", self._calcular_semanas).pack(side="left")
+        self._boton(bi, "Limpiar inventario", self._limpiar_inventario, "Gris").pack(side="left", padx=6)
+        self.lbl_inv = ttk.Label(bi, text="", style="Nota.TLabel")
+        self.lbl_inv.pack(side="left", padx=10)
         self.s_sw2 = self._seccion(p, "2. ACEITES DEL PLAZO")
         self.s_sw2.pack(fill="x", pady=6, padx=6)
         self.sw2_marco = ttk.Frame(self.s_sw2)
@@ -1176,7 +1207,7 @@ class App(tk.Tk):
         s3.pack(fill="x", pady=6, padx=6)
         self.sw3_marco = ttk.Frame(s3)
         self.sw3_marco.pack(fill="x")
-        self.s_sw4 = self._seccion(p, "4. NECESIDAD NETA · descontando la proyección anterior", "litros")
+        self.s_sw4 = self._seccion(p, "4. NECESIDAD NETA · lo que hay que pedir", "litros")
         self.s_sw4.pack(fill="x", pady=6, padx=6)
         self.lbl_sw4 = ttk.Label(self.s_sw4, text="", style="Nota.TLabel", wraplength=1150, justify="left")
         self.lbl_sw4.pack(anchor="w", pady=(0, 6))
@@ -1223,8 +1254,35 @@ class App(tk.Tk):
         a1, a2 = self._ant_actual()
         self.var_ant1.set(fmt_fecha(a1))
         self.var_ant2.set(fmt_fecha(a2))
+        for pt, vs in self.vars_inv.items():
+            inv = self.m.inventario.get(pt, {})
+            for v, k in zip(vs, ("stock", "solicitado", "transito")):
+                v.set(fmt_tipo(inv[k]).replace(".", ",") if es_num(inv.get(k)) else "")
+        activo = self.m.inventario_activo()
+        self.lbl_inv.configure(text="Inventario en uso para calcular lo que hay que pedir." if activo else
+                               "Sin inventario: se usa la proyección anterior (si la hay).")
         nn = self.m.necesidad_neta(s, a1, a2)
         tarro = fmt_tipo(self.m.p["tarro"])
+        if nn.get("modo") == "inventario":
+            self.lbl_sw4.configure(text=f"Descontando inventario: disponible = stock (L) + (solicitado + en tránsito) × "
+                                        f"{tarro} L. Tarros a pedir = (necesidad con margen − disponible) / {tarro} L, "
+                                        f"redondeado hacia arriba. Se ahorran {nn['total_ahorro']} tarro(s) respecto "
+                                        "del cálculo sin descontar.")
+            cols = [("p", "N° parte", 66, "w"), ("n", "Lubricante", 190, "w"),
+                    ("ne", "Necesidad (L)", 92, "center"), ("tb", "Tarros brutos", 90, "center"),
+                    ("st", "Stock (L)", 72, "center"), ("so", "Solicitado (tarros)", 115, "center"),
+                    ("tr", "En tránsito (tarros)", 118, "center"), ("di", "Disponible (L)", 95, "center"),
+                    ("nn", "Neta (L)", 75, "center"), ("tp", "Tarros a pedir", 98, "center"),
+                    ("pu", "Precio unitario", 100, "center"), ("vt", "Total $", 110, "center")]
+            filas, tags = [], []
+            for f in nn["filas"]:
+                filas.append([f["parte"], f["nombre"], f["necesidad"], f["tarros_brutos"], f["stock"], f["solicitado"],
+                              f["transito"], f["disponible"], f["neta"], f["tarros"], _pesos(f["precio"]),
+                              _pesos(f["valor"])])
+                tags.append("verde" if f["ahorro"] > 0 else "")
+            tot = ["TOTAL", ""] + [sum(r[i] for r in filas) for i in range(2, 10)] + ["", _pesos(nn["total_valor"])]
+            self._reemplazar_tabla(self.sw4_marco, cols, filas + [tot], tags + ["total"])
+            return
         if nn["hay"]:
             txt = (f"Proyección anterior {fmt_fecha(a1)} al {fmt_fecha(a2)} · proyección actual {fmt_fecha(s['ini'])} al "
                    f"{fmt_fecha(s['fin'])} ({nn['solape']} día(s) en común). Saldo = tarros pedidos antes × {tarro} L − "
@@ -1253,8 +1311,17 @@ class App(tk.Tk):
         self._reemplazar_tabla(self.sw4_marco, cols, filas, tags + ["total"])
 
     def _calcular_semanas(self):
+        if not self.acc.guardar_inventario({pt: tuple(v.get() for v in vs) for pt, vs in self.vars_inv.items()}):
+            return
         if self.acc.definir_semanas(self.var_sini.get(), self.var_sn.get(), self.var_ant1.get(), self.var_ant2.get()):
             self.refrescar()
+
+    def _limpiar_inventario(self):
+        if not messagebox.askyesno(TITULO, "¿Borrar el stock, lo solicitado y lo en tránsito de todos los aceites?",
+                                   parent=self):
+            return
+        self.repo.set_config("inventario", {})
+        self.refrescar()
 
     def _exportar_semanas(self):
         _, _, ini, n = self._periodo_actual()
@@ -1384,7 +1451,34 @@ class App(tk.Tk):
                             ruta)
 
     # ---------------------------------------------------- LECTURAS / PROGRAM.
+    def _reporte_horas(self):
+        eqs = [(eq, f"{self.m.modelo_de(eq)}  ·  PM {fmt_tipo(self.m.estado(eq)['sugerido'])}"
+                    + (f" programada {fmt_fecha(self.m.estado(eq)['fprog'])}" if self.m.estado(eq)["fprog"]
+                       else " sin programar")) for eq in self.m.lista_equipos()]
+        d = DialogoEquipos(self, eqs, "Reporte de horas para la PM")
+        if not d.resultado:
+            return
+        ruta = filedialog.asksaveasfilename(parent=self, title="Guardar reporte de horas para la PM",
+                                            initialfile=f"Horas_para_PM_{'_'.join(d.resultado)}_{self.m.hoy:%d-%m-%Y}.pdf",
+                                            initialdir=str(self.ruta_db.parent), defaultextension=".pdf",
+                                            filetypes=[("Documento PDF", "*.pdf")])
+        if not ruta:
+            return
+        if not ruta.lower().endswith(".pdf"):
+            ruta += ".pdf"
+        try:
+            filas = reporte_horas.exportar_horas_pdf(self.m, d.resultado, ruta, self.acc.usuario())
+        except Exception as ex:
+            self._error_export(ex)
+            return
+        det = "\n".join(f"{f['equipo']}: faltan {fmt_num(f['faltan'])} h para la PM {fmt_tipo(f['pm'])}"
+                        for f in filas if f["hay"])
+        self._tras_exportar(f"Reporte de horas para la PM exportado:\n{ruta}\n\n{det}", ruta)
+
     def _tab_lecturas(self, tab):
+        b = ttk.Frame(tab)
+        b.pack(anchor="e")
+        self._boton(b, "Reporte horas a PM (PDF)", self._reporte_horas, "Naranja").pack()
         ttk.Label(tab, text="LECTURAS DE HORÓMETRO", style="Titulo.TLabel").pack(anchor="w")
         ttk.Label(tab, text="Se actualizan al abrir el programa y con «Actualizar horómetro».", style="Nota.TLabel"
                   ).pack(anchor="w")

@@ -560,6 +560,27 @@ class Acciones:
                      f"{fmt_tipo(self.m.p['tarro'])} L.\n\nPresione «Exportar» para generar el Excel de compra.")
         return True
 
+    def guardar_inventario(self, valores: dict) -> bool:
+        """valores: {parte: (stock_litros, solicitado_tarros, transito_tarros)} como texto; vacío = sin dato."""
+        nombres = (("stock", "Stock (L)"), ("solicitado", "Solicitado (tarros)"), ("transito", "En tránsito (tarros)"))
+        inv = {}
+        for parte, textos in valores.items():
+            fila = {}
+            for (clave, etiqueta), txt in zip(nombres, textos):
+                txt = (txt or "").strip()
+                if not txt:
+                    fila[clave] = None
+                    continue
+                n = parse_num(txt)
+                if n is None or n < 0:
+                    self.ui.aviso(f"{parte} · {etiqueta}: ingrese un número mayor o igual a cero (o déjelo vacío).")
+                    return False
+                fila[clave] = n
+            inv[parte] = fila
+        self.repo.set_config("inventario", inv)
+        self.recargar()
+        return True
+
     def definir_semanas(self, s1: str, s_n: str, ant1: str = "", ant2: str = "") -> bool:
         ant1, ant2 = (ant1 or "").strip(), (ant2 or "").strip()
         a1 = a2 = None
@@ -608,7 +629,10 @@ class Acciones:
         txt = (f"Plazo: {fmt_fecha(d1)} al {fmt_fecha(d2)} ({n} {'semana' if n == 1 else 'semanas'}).\n\n"
                f"PM del plazo: {s['n_pm_total']}\nTotal con margen: {fmt_num(s['total_con_margen'])} L  ·  "
                f"{s['total_tarros']} tarros de {fmt_tipo(self.m.p['tarro'])} L  ·  ${fmt_num(s['total_valor'])}.")
-        if nn["hay"]:
+        if nn.get("modo") == "inventario":
+            txt += ("\n\nDescontando stock, solicitado y en tránsito:\n"
+                    f"Tarros a pedir: {nn['total_tarros']}  ·  ${fmt_num(nn['total_valor'])}.")
+        elif nn["hay"]:
             txt += (f"\n\nDescontando la proyección anterior ({fmt_fecha(a1)} al {fmt_fecha(a2)}):\n"
                     f"Tarros a pedir: {nn['total_tarros']}  ·  ${fmt_num(nn['total_valor'])}.")
         self.ui.info(txt + "\n\nPresione «Exportar» para generar el Excel con el detalle por semana y por PM.")

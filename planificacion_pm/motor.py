@@ -70,6 +70,7 @@ class Motor:
         self.descripciones = {d["np"]: d["descripcion"] for d in r.get_config("descripciones", [])}
         self.precios = {str(x["parte"]).strip(): float(x["precio"] or 0)
                         for x in r.get_config("precios", PRECIOS_DEFECTO) if x.get("parte")}
+        self.inventario = r.get_config("inventario", {}) or {}
         self.hist = r.historial()
         self.ac = r.aceites()
         self.lecturas = r.lecturas()
@@ -583,7 +584,39 @@ class Motor:
                     total_con_margen=sum(f["con_margen"] for f in filas),
                     total_tarros=sum(f["tarros"] for f in filas), total_valor=sum(f["valor"] for f in filas))
 
+    def inventario_activo(self) -> bool:
+        """True si se escribió algún valor de stock, solicitado o en tránsito."""
+        return any(es_num(v.get(k)) for v in self.inventario.values() for k in ("stock", "solicitado", "transito"))
+
     def necesidad_neta(self, sem: dict, ant_ini: dt.date | None, ant_fin: dt.date | None) -> dict:
+        if self.inventario_activo():
+            return self._necesidad_inventario(sem, ant_ini, ant_fin)
+        return self._necesidad_proyeccion(sem, ant_ini, ant_fin)
+
+    def _necesidad_inventario(self, sem: dict, ant_ini, ant_fin) -> dict:
+        """Tarros a pedir = (necesidad con margen - stock (L) - (solicitado + en tránsito) × L por tarro) / L por tarro."""
+        tarro = float(self.p["tarro"])
+        filas = []
+        for f in sem["filas"]:
+            pt = f["parte"]
+            inv = self.inventario.get(pt, {})
+            stock = float(inv["stock"]) if es_num(inv.get("stock")) else 0.0
+            sol = float(inv["solicitado"]) if es_num(inv.get("solicitado")) else 0.0
+            tra = float(inv["transito"]) if es_num(inv.get("transito")) else 0.0
+            disp = stock + (sol + tra) * tarro
+            neta = max(0.0, f["con_margen"] - disp)
+            tarros = redondear_arriba(neta / tarro) if tarro else 0
+            filas.append(dict(parte=pt, nombre=f["nombre"], necesidad=f["con_margen"], tarros_brutos=f["tarros"],
+                              stock=stock, solicitado=sol, transito=tra, disponible=disp, saldo=disp, neta=neta,
+                              tarros=tarros, ahorro=f["tarros"] - tarros, precio=self.precio(pt),
+                              valor=tarros * self.precio(pt), valor_bruto=f["valor"],
+                              tarros_ant=0, pedido_ant=0.0, consumo=0.0))
+        return dict(modo="inventario", hay=True, ant_ini=ant_ini, ant_fin=ant_fin, fin_cons=sem["ini"] - DIA,
+                    solape=0, filas=filas, total_tarros=sum(f["tarros"] for f in filas),
+                    total_valor=sum(f["valor"] for f in filas), total_bruto=sum(f["valor_bruto"] for f in filas),
+                    total_ahorro=sum(f["ahorro"] for f in filas))
+
+    def _necesidad_proyeccion(self, sem: dict, ant_ini: dt.date | None, ant_fin: dt.date | None) -> dict:
         """Necesidad del plazo actual descontando el saldo de lo pedido en la proyección anterior.
 
         Pedido anterior = tarros calculados para [ant_ini, ant_fin] × litros por tarro.
@@ -612,10 +645,31 @@ class Motor:
         solape = 0
         if hay:
             solape = max(0, (min(ant_fin, sem["fin"]) - max(ant_ini, sem["ini"])).days + 1)
-        return dict(hay=hay, ant_ini=ant_ini, ant_fin=ant_fin, fin_cons=fin_cons, solape=solape, filas=filas,
+        return dict(modo="proyeccion", hay=hay, ant_ini=ant_ini, ant_fin=ant_fin, fin_cons=fin_cons, solape=solape,
+                    filas=filas,
                     total_tarros=sum(f["tarros"] for f in filas), total_valor=sum(f["valor"] for f in filas),
                     total_bruto=sum(f["valor_bruto"] for f in filas),
                     total_ahorro=sum(f["ahorro"] for f in filas))
+
+    def horas_pm(self, equipos: list[str]) -> list[dict]:
+        """Datos del reporte «Horas para la PM programada» de los equipos elegidos."""
+        intervalo = float(self.p["intervalo"])
+        out = []
+        for eq in equipos:
+            e = self.estado(eq)
+            hay = e["n"] > 0
+            fref = e["fprog"] or (e["fecha_sug"] if hay and e["con_lectura"] else None)
+            horo_ref = (e["horo_est_hoy"] + max(0, (fref - self.hoy).days) * e["promedio_proy"]) if fref and hay else None
+            out.append(dict(
+                equipo=eq, modelo=e["modelo"], faena=e["faena"], hay=hay, pm=e["sugerido"], fprog=e["fprog"],
+                programada=bool(e["fprog"]), estado_prog=e["estado_prog"], ult_tipo=e["ult_tipo"],
+                ult_horo=e["ult_horo"], ult_fecha=e["ult_fecha"], horo_hoy=e["horo_in"], fecha_lect=e["fecha_lect"],
+                objetivo=e["proyectado"], acum=e["acum"], faltan=e["rest"], intervalo=intervalo,
+                avance=max(0.0, min(1.0, e["acum"] / intervalo)) if intervalo else 0.0, estado=e["estado"],
+                fecha_venc=e["fecha_proy"] if hay and e["con_lectura"] else None, fecha_sug=e["fecha_sug"],
+                fecha_ref=fref, horo_ref=horo_ref, dif_ref=(horo_ref - e["proyectado"]) if horo_ref is not None else None,
+                promedio=e["promedio"], promedio_proy=e["promedio_proy"], dias_rest=e["dias_rest"]))
+        return out
 
     # --------------------------------------------------------- kits a solicitar
     def kits_solicitar(self, per: dict, sem: dict) -> dict:

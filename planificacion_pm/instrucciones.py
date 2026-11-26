@@ -27,6 +27,7 @@ TEXTO = """
 3. «Eliminar última PM» borra el último registro del equipo y sus cambios de aceite, y restituye su programación.
 4. «Programar PM» asigna la fecha de la PM actual; si es posterior a la sugerida o a la proyectada, advierte el riesgo y el exceso de horas estimado. Con la fecha vacía, anula la programación.
 5. «Cambio de aceite» registra el cambio de uno o varios aceites fuera de una PM (Origen «Cambio individual») y reinicia su contador.
+7. «Reporte horas a PM (PDF)» (Panel y Lecturas y programación): elija los equipos y obtenga, para cada uno, la PM programada, el horómetro de hoy, el objetivo y las horas que faltan para completar las 250 h, con barra de avance y estado.
 6. «Solicitud de análisis» exporta el formato del laboratorio del modelo con la última PM ejecutada del equipo.
 
 # E. Lógica de cálculo
@@ -45,7 +46,8 @@ TEXTO = """
 1. «Proyección aceites»: defina Desde / Hasta (dd-mm-aaaa) y presione «Definir período». El tramo anterior a hoy suma las PM ejecutadas del Historial y el tramo desde hoy, las PM proyectadas. LL-0006 se calcula por días calendario × litros por día.
 2. «Exportar» genera un Excel con Resumen, Por equipo, Mes a mes, PM incluidas y Kits a solicitar.
 3. «Aceites por semanas»: ① proyección anterior (desde y hasta, opcional), ② fecha de inicio de la proyección actual y ③ N° de semanas (1 a 52). «Exportar» genera Resumen, Necesidad neta, Semana a semana, PM incluidas y Kits a solicitar.
-4. Necesidad neta: a lo pedido en la proyección anterior (tarros × litros por tarro) se le resta lo consumido desde su inicio hasta el día antes de la proyección actual; ese saldo se descuenta de la necesidad del nuevo plazo, para no volver a pedir aceite que ya estaba cubierto.
+4. Inventario y pedidos (opcional): escriba por aceite el stock en bodega (litros), lo solicitado pendiente (tarros) y lo que viene en tránsito a faena (tarros). Si hay algún valor, tarros a pedir = (necesidad con margen − stock − (solicitado + tránsito) × litros por tarro) / litros por tarro. «Limpiar inventario» vuelve al cálculo con la proyección anterior.
+4b. Necesidad neta: a lo pedido en la proyección anterior (tarros × litros por tarro) se le resta lo consumido desde su inicio hasta el día antes de la proyección actual; ese saldo se descuenta de la necesidad del nuevo plazo, para no volver a pedir aceite que ya estaba cubierto.
 5. Precios: cada lubricante tiene un valor referencial por tarro (Configuración > Precios de lubricantes). Total $ = precio unitario × N° de tarros; aparece en Compra de aceites, Aceites por semanas y sus Excel.
 6. «Kits a solicitar»: kits y repuestos sueltos del período por fechas y del plazo en semanas. Un kit por PM según modelo y tipo; repuestos sueltos = cantidad por PM × N° de PM.
 7. «Kits PM» > «Exportar listado»: listado de repuestos sin duplicados con descripción, ubicación, dónde se usa y cantidad por tipo de PM.

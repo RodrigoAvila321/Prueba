@@ -142,3 +142,28 @@ def test_entorno_limpio_para_reiniciar():
     from pathlib import Path
     bat = actualizar.script_reemplazo(Path("C:/a/n.exe"), Path("C:/a/p.exe"))
     assert "set PYINSTALLER_RESET_ENVIRONMENT=1" in bat and "set _PYI_APPLICATION_HOME_DIR=" in bat
+
+
+def test_inventario_manual_y_reporte_horas(tmp_path):
+    r = _repo(tmp_path)
+    r.set_config("diario", [{"equipo": "X1", "parte": "P9", "lubricante": "Diario", "litros_dia": 20}])
+    hoy = dt.date(2026, 1, 15)
+    m = Motor(r, hoy=hoy)
+    s = m.semanas(hoy, 2)                       # 14 x 20 = 280 L + 20 % = 336 L -> 2 tarros
+    assert not m.inventario_activo()
+    r.set_config("inventario", {"P9": {"stock": 50.0, "solicitado": None, "transito": 1.0}})
+    m.recargar()
+    nn = m.necesidad_neta(s, None, None)
+    g = [x for x in nn["filas"] if x["parte"] == "P9"][0]
+    assert nn["modo"] == "inventario" and g["disponible"] == 258 and g["tarros"] == 1   # 336 - 258 = 78 L
+    # Reporte de horas: equipo con 4 PM y lectura
+    for i, (t, h, d) in enumerate([(250, 250, 1), (500, 500, 5), (250, 750, 9), (1000, 1000, 13)]):
+        r.agregar_historial({"id": i + 1, "equipo": "X1", "modelo": "M", "tipo": t, "fecha": dt.date(2026, 1, d),
+                             "horo": h, "pos": {500: 1, 1000: 2}.get(t)})
+    r.set_lectura("X1", 1180, hoy, "u")
+    m.recargar()
+    f = m.horas_pm(["X1"])[0]
+    assert f["faltan"] == 70 and f["objetivo"] == 1250 and not f["programada"]
+    from planificacion_pm.reporte_horas import exportar_horas_pdf
+    exportar_horas_pdf(m, ["X1"], str(tmp_path / "h.pdf"), "u")
+    assert (tmp_path / "h.pdf").stat().st_size > 2000

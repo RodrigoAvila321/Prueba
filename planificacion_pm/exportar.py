@@ -331,6 +331,19 @@ def escribir_necesidad_neta(ws, m: Motor, s: dict, nn: dict):
     tarro = fmt_tipo(m.p["tarro"])
     _titulo(ws, "A1", f"NECESIDAD NETA DE ACEITES · {fmt_fecha(s['ini'])} al {fmt_fecha(s['fin'])} "
                       f"({s['n']} {'semana' if s['n'] == 1 else 'semanas'})", 13)
+    if nn.get("modo") == "inventario":
+        _nota(ws, "A2", f"Plazo desde el {fmt_fecha(s['ini'])} · {s['n']} semana(s) · descontando el inventario "
+              "ingresado (stock en bodega, solicitado pendiente y en tránsito a faena).")
+        _nota(ws, "A3", f"Disponible = stock (L) + (solicitado + en tránsito) × {tarro} L. Necesidad neta = necesidad del "
+              f"plazo con margen − disponible. Tarros a pedir = necesidad neta / {tarro} L, redondeado hacia arriba.")
+        hdr = ["N° parte", "Lubricante", "Necesidad del plazo con margen (L)", "Tarros sin descontar",
+               "Stock en bodega (L)", "Solicitado pendiente (tarros)", "En tránsito a faena (tarros)",
+               "Disponible (L)", "Necesidad neta (L)", "Tarros a pedir", "Tarros ahorrados",
+               "Precio unitario (por tarro)", "Total $ (precio × tarros a pedir)"]
+        claves = ["parte", "nombre", "necesidad", "tarros_brutos", "stock", "solicitado", "transito", "disponible",
+                  "neta", "tarros", "ahorro", "precio", "valor"]
+        _tabla_neta(ws, m, nn, hdr, claves)
+        return
     if nn["hay"]:
         _nota(ws, "A2", f"① Proyección anterior: {fmt_fecha(nn['ant_ini'])} al {fmt_fecha(nn['ant_fin'])}   ·   "
               f"② Proyección actual desde el {fmt_fecha(s['ini'])}   ·   ③ {s['n']} semana(s)   ·   "
@@ -345,14 +358,18 @@ def escribir_necesidad_neta(ws, m: Motor, s: dict, nn: dict):
            "Tarros pedidos en la proyección anterior", f"Litros pedidos (tarros × {tarro} L)",
            "Consumo desde la proyección anterior (L)", "Saldo disponible (L)", "Necesidad neta (L)",
            "Tarros a pedir", "Tarros ahorrados", "Precio unitario (por tarro)", "Total $ (precio × tarros a pedir)"]
+    claves = ["parte", "nombre", "necesidad", "tarros_brutos", "tarros_ant", "pedido_ant", "consumo", "saldo", "neta",
+              "tarros", "ahorro", "precio", "valor"]
+    _tabla_neta(ws, m, nn, hdr, claves)
+
+
+def _tabla_neta(ws, m: Motor, nn: dict, hdr: list, claves: list):
     r0 = 6
     for j, h in enumerate(hdr):
         ws.cell(r0, 1 + j, h)
     for i, f in enumerate(nn["filas"]):
-        vals = [f["parte"], f["nombre"], f["necesidad"], f["tarros_brutos"], f["tarros_ant"], f["pedido_ant"],
-                f["consumo"], f["saldo"], f["neta"], f["tarros"], f["ahorro"], f["precio"], f["valor"]]
-        for j, v in enumerate(vals):
-            ws.cell(r0 + 1 + i, 1 + j, v)
+        for j, k in enumerate(claves):
+            ws.cell(r0 + 1 + i, 1 + j, f[k])
     r = r0 + 1 + len(nn["filas"])
     ws.cell(r, 1, "TOTAL")
     for j in range(3, 14):

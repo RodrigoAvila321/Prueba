@@ -308,6 +308,57 @@ class DialogoResumen(tk.Toplevel):
         self.destroy()
 
 
+class DialogoEquipos(tk.Toplevel):
+    """Elegir los equipos que entran en un reporte."""
+
+    def __init__(self, parent, equipos, titulo="Reporte de horas para la PM"):
+        super().__init__(parent)
+        self.title(f"{TITULO} · {titulo}")
+        self.transient(parent)
+        self.resizable(False, False)
+        self.resultado = None
+        f = tk.Frame(self, background=TARJETA, padx=22, pady=18)
+        f.pack(fill="both")
+        self._img = tema.icono(self, "camion", 22, ACENTO)
+        tk.Label(f, image=self._img, text=f"  {titulo}", compound="left", background=TARJETA, foreground=NAVY,
+                 font=(FUENTE, 13, "bold")).pack(anchor="w")
+        tk.Label(f, text="Marque los equipos que quiere incluir:", background=TARJETA, foreground=TEXTO,
+                 font=(FUENTE, 10, "bold")).pack(anchor="w", pady=(14, 6))
+        caja = tk.Frame(f, background=TARJETA)
+        caja.pack(anchor="w")
+        self.vars = {}
+        for i, (eq, desc) in enumerate(equipos):
+            v = tk.BooleanVar(value=False)
+            ttk.Checkbutton(caja, text=f"{eq}   {desc}", variable=v).grid(row=i // 2, column=i % 2, sticky="w",
+                                                                          padx=(0, 24), pady=3)
+            self.vars[eq] = v
+        b0 = tk.Frame(f, background=TARJETA)
+        b0.pack(anchor="w", pady=(8, 0))
+        ttk.Button(b0, text="Todos", style="Gris.TButton", command=lambda: self._todos(True)).pack(side="left")
+        ttk.Button(b0, text="Ninguno", style="Gris.TButton", command=lambda: self._todos(False)).pack(side="left",
+                                                                                                    padx=6)
+        b = tk.Frame(f, background=TARJETA)
+        b.pack(fill="x", pady=(16, 0))
+        ttk.Button(b, text="Cancelar", style="Gris.TButton", command=self.destroy).pack(side="right")
+        ttk.Button(b, text="Generar PDF", style="Verde.TButton", command=self._ok).pack(side="right", padx=8)
+        self.bind("<Escape>", lambda _e: self.destroy())
+        _centrar(self, parent)
+        self.grab_set()
+        self.wait_window()
+
+    def _todos(self, v):
+        for x in self.vars.values():
+            x.set(v)
+
+    def _ok(self):
+        sel = [eq for eq, v in self.vars.items() if v.get()]
+        if not sel:
+            messagebox.showwarning(TITULO, "Marque al menos un equipo.", parent=self)
+            return
+        self.resultado = sel
+        self.destroy()
+
+
 class DialogoVarios(tk.Toplevel):
     """Lista de casillas para elegir uno o varios elementos."""
 
