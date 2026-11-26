@@ -168,3 +168,21 @@ def test_inventario_manual_y_reporte_horas(tmp_path):
     from planificacion_pm.reporte_horas import exportar_horas_pdf
     exportar_horas_pdf(m, ["X1"], str(tmp_path / "h.pdf"), "u")
     assert (tmp_path / "h.pdf").stat().st_size > 2000
+
+
+def test_exportar_pedido(tmp_path):
+    import openpyxl
+
+    from planificacion_pm.exportar import exportar_pedido
+    r = _repo(tmp_path)
+    r.set_config("diario", [{"equipo": "X1", "parte": "P9", "lubricante": "Diario", "litros_dia": 20}])
+    r.set_config("precios", [{"parte": "P9", "lubricante": "Diario", "precio": 1000}])
+    r.set_config("inventario", {"P9": {"stock": 100.0, "solicitado": None, "transito": None}})
+    m = Motor(r, hoy=dt.date(2026, 1, 15))
+    exportar_pedido(m, dt.date(2026, 1, 15), 1, str(tmp_path / "p.xlsx"), "u")
+    wb = openpyxl.load_workbook(tmp_path / "p.xlsx")
+    assert wb.sheetnames == ["Pedido"]
+    ws = wb["Pedido"]
+    fila = [c.value for c in ws[7] if c.value is not None]
+    assert "P9" in [c.value for row in ws.iter_rows(min_row=7) for c in row]
+    assert str(ws["A1"].value).startswith("PEDIDO DE ACEITES") and fila

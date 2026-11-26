@@ -1195,6 +1195,7 @@ class App(tk.Tk):
         bi = ttk.Frame(si)
         bi.grid(row=2 + len(self.vars_inv), column=0, columnspan=5, sticky="w", pady=(8, 0))
         self._boton(bi, "Calcular", self._calcular_semanas).pack(side="left")
+        self._boton(bi, "Exportar pedido", self._exportar_pedido, "Verde").pack(side="left", padx=(6, 0))
         self._boton(bi, "Limpiar inventario", self._limpiar_inventario, "Gris").pack(side="left", padx=6)
         self.lbl_inv = ttk.Label(bi, text="", style="Nota.TLabel")
         self.lbl_inv.pack(side="left", padx=10)
@@ -1322,6 +1323,27 @@ class App(tk.Tk):
             return
         self.repo.set_config("inventario", {})
         self.refrescar()
+
+    def _exportar_pedido(self):
+        if not self.acc.guardar_inventario({pt: tuple(v.get() for v in vs) for pt, vs in self.vars_inv.items()}):
+            return
+        _, _, ini, n = self._periodo_actual()
+        if not ini:
+            self.ui.aviso("Primero defina el plazo con «Calcular».")
+            return
+        self.refrescar()
+        ruta = self._guardar_como(f"Pedido_aceites_{ini:%d-%m-%Y}_{n}_semanas.xlsx", "Exportar pedido de aceites")
+        if not ruta:
+            return
+        try:
+            r = exportar.exportar_pedido(self.m, ini, n, ruta, self.acc.usuario())
+        except Exception as ex:
+            self._error_export(ex)
+            return
+        nn, s = r["nn"], r["sem"]
+        self._tras_exportar(f"Pedido de aceites exportado:\n{ruta}\n\nPlazo {fmt_fecha(s['ini'])} al "
+                            f"{fmt_fecha(s['fin'])}: {nn['total_tarros']} tarros a pedir · "
+                            f"${fmt_num(nn['total_valor'])}.", ruta)
 
     def _exportar_semanas(self):
         _, _, ini, n = self._periodo_actual()

@@ -388,6 +388,24 @@ def _tabla_neta(ws, m: Motor, nn: dict, hdr: list, claves: list):
     _anchos(ws, {"A": 12, "B": 32, **{get_column_letter(c): 15 for c in range(3, 12)}, "L": 18, "M": 22})
 
 
+# ================================================================ pedido (inventario y necesidad neta)
+def exportar_pedido(m: Motor, ini: dt.date, n: int, ruta: str, usuario: str) -> dict:
+    """Excel de una hoja con el inventario ingresado y lo que hay que pedir (tarros, precio y total $)."""
+    s = m.semanas(ini, n)
+    per_cfg = m.repo.get_config("periodos", {})
+    nn = m.necesidad_neta(s, _f(per_cfg.get("ant_desde")), _f(per_cfg.get("ant_hasta")))
+    wb, ws = _libro()
+    ws.title = "Pedido"
+    escribir_necesidad_neta(ws, m, s, nn)
+    _titulo(ws, "A1", f"PEDIDO DE ACEITES · {fmt_fecha(s['ini'])} al {fmt_fecha(s['fin'])} "
+                      f"({s['n']} {'semana' if s['n'] == 1 else 'semanas'})", 13)
+    _nota(ws, "A5", f"Emitido el {dt.datetime.now():%d-%m-%Y %H:%M} por {usuario}  ·  Tarros a pedir: "
+          f"{nn['total_tarros']}  ·  Total: ${nn['total_valor']:,.0f}".replace(",", "."))
+    ws.freeze_panes = "C7"
+    wb.save(ruta)
+    return dict(sem=s, nn=nn)
+
+
 # ================================================================ aceites por semanas
 def exportar_semanas(m: Motor, ini: dt.date, n: int, ruta: str, usuario: str, origen: str) -> dict:
     s = m.semanas(ini, n)
