@@ -35,6 +35,20 @@ pyinstaller --noconfirm --onefile --windowed --icon icono.ico --splash splash.pn
 
 Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python main.py`.
 
+## Versión de muestra para Mac
+
+Cada versión publica también **`PlanificacionPM-Mac.zip`** en la misma Release (enlace permanente arriba).
+Es una muestra para presentar el programa desde un Mac: trae una flota de ejemplo con **datos ficticios**
+(se crean al primer inicio, sin información real) y todas las funciones; la versión real es la de Windows.
+
+1. Descargue `PlanificacionPM-Mac.zip` y descomprímalo (doble clic).
+2. La primera vez abra «Planificacion PM» con **clic derecho > Abrir > Abrir** (la app no está firmada por Apple).
+3. Los datos de la muestra quedan en `Documentos/PlanificacionPM`; **Configuración > Restaurar datos de ejemplo**
+   los vuelve al estado inicial. También se puede importar un `.xlsm` o un respaldo `.db`.
+
+Compilada para Mac con Apple Silicon (M1 o posterior). La actualización automática y el acceso directo del escritorio
+son solo de Windows. Para probarla en otro sistema sin compilar: `PLANPM_DEMO=1 python main.py`.
+
 ## Primer uso
 
 1. Al abrir por primera vez, el programa pide el libro Excel original (`.xlsm`) e importa Historial,

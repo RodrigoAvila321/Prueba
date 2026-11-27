@@ -548,7 +548,9 @@ class Desplazable(ttk.Frame):
         self.canvas.bind("<Leave>", lambda _e: self.canvas.unbind_all("<MouseWheel>"))
 
     def _rueda(self, e):
-        self.canvas.yview_scroll(int(-e.delta / 120), "units")
+        d = e.delta
+        paso = -d if abs(d) < 120 else int(-d / 120)   # en Mac el trackpad entrega valores pequeños
+        self.canvas.yview_scroll(paso, "units")
 
 
 def _centrar(win, parent):

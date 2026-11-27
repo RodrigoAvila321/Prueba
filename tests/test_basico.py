@@ -195,3 +195,16 @@ def test_pantalla_de_carga(tmp_path):
     assert splash.cuadro(0.5).tobytes() != splash.cuadro(1.5).tobytes()   # la perforadora se mueve
     splash.guardar_png(str(tmp_path / "s.png"))
     assert (tmp_path / "s.png").stat().st_size > 5000
+
+
+def test_datos_de_ejemplo(tmp_path):
+    from planificacion_pm.demo import crear_demo
+    r = Repositorio(tmp_path / "demo.db")
+    res = crear_demo(r, hoy=dt.date(2026, 11, 27))
+    assert res["historial"] > 100 and res["aceites"] > 500
+    m = Motor(r, hoy=dt.date(2026, 11, 27))
+    assert m.lista_equipos() == ["D10", "D11", "D14", "D15", "D16"]
+    for eq in m.lista_equipos():
+        e = m.estado(eq)
+        assert e["n"] > 10 and e["con_lectura"] and len(m.proyeccion(eq)) == 120
+    assert not any("Rodrigo" in str(f["reg_por"]) for f in m.hist)   # solo datos ficticios

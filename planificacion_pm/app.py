@@ -21,6 +21,8 @@ from .widgets import (AZUL, NARANJA, ROJO, VERDE, Desplazable, DialogoFila, Dial
                       EditorTabla, DialogoEquipos, DialogoResumen, FranjaSeguridad, Medidor, Seccion, Tarjeta, VidaAceites, llenar, tabla)
 
 NOMBRE_DB = "PlanificacionPM_datos.db"
+ES_WINDOWS = sys.platform.startswith("win")
+ES_MUESTRA = sys.platform == "darwin" or os.environ.get("PLANPM_DEMO") == "1"   # versión de muestra (Mac)
 
 
 def _pesos(x) -> str:
@@ -110,7 +112,8 @@ class App(tk.Tk):
     def __init__(self, ruta_db: Path | None = None, hoy: dt.date | None = None, carga: bool = True):
         super().__init__()
         self.withdraw()
-        self.title(f"{TITULO} · Mantención preventiva de equipos de perforación (v{__version__})")
+        self.title(f"{TITULO} · Mantención preventiva de equipos de perforación (v{__version__})"
+                   + ("  ·  versión de muestra" if ES_MUESTRA else ""))
         self.geometry("1440x880")
         self.minsize(1000, 640)
         self._estilos()
@@ -125,7 +128,13 @@ class App(tk.Tk):
         self.ruta_db = ruta_db or carpeta_datos() / NOMBRE_DB
         self.repo = Repositorio(self.ruta_db)
         self.ui = UITk(self)
-        if self.repo.vacia():
+        self._demo_nueva = False
+        if self.repo.vacia() and ES_MUESTRA:
+            self._estado_carga("Creando datos de ejemplo")
+            from .demo import crear_demo
+            crear_demo(self.repo)
+            self._demo_nueva = True
+        elif self.repo.vacia():
             self._cerrar_carga(0)
             if not self._primer_inicio():
                 self.after(10, self.destroy)
@@ -235,7 +244,12 @@ class App(tk.Tk):
         """Auto_Open: solicita el horómetro de hoy del equipo seleccionado."""
         self.acc.actualizar_horometro(self.var_eq.get(), al_abrir=True)
         self.refrescar()
-        self._revisar_version_en_segundo_plano()
+        if ES_WINDOWS:
+            self._revisar_version_en_segundo_plano()
+        if self._demo_nueva:
+            self.ui.info("Versión de muestra con datos de ejemplo ficticios (flota D10 · D11 · D14 · D15 · D16).\n\n"
+                         "Puede recorrer todas las pantallas, registrar PM y exportar reportes. Para usar datos "
+                         "reales, importe un .xlsm o un respaldo .db desde Configuración > Datos.")
 
     # ------------------------------------------------------------ actualizaciones
     def _revisar_version_en_segundo_plano(self):
@@ -361,7 +375,8 @@ class App(tk.Tk):
         self._items = {}
         for nombre, ic, etiqueta in self.PAGINAS:
             self._items[nombre] = self._item_lateral(lat, nombre, ic, etiqueta)
-        tk.Label(lat, text=f"v{__version__}  ·  datos locales", background=tema.NAVY, foreground="#7F8DA3",
+        tk.Label(lat, text=f"v{__version__}  ·  " + ("versión de muestra" if ES_MUESTRA else "datos locales"),
+                 background=tema.NAVY, foreground="#7F8DA3",
                  font=(tema.FUENTE, 8)).pack(side="bottom", anchor="w", padx=18, pady=12)
         self.lbl_nueva = tk.Label(lat, text="", background=tema.ACENTO, foreground="#FFFFFF", cursor="hand2",
                                   font=(tema.FUENTE, 9, "bold"), padx=10, pady=8, justify="left", wraplength=190)
@@ -495,9 +510,10 @@ class App(tk.Tk):
         self.var_fprog = tk.StringVar()
         ttk.Entry(fp, textvariable=self.var_fprog, width=12).pack(side="left", padx=6)
         self._boton(fp, "Programar PM", self._programar).pack(side="left")
-        self._boton(fp, "Reporte horas a PM (PDF)", self._reporte_horas, "Naranja").pack(side="left", padx=6)
         self.lbl_nota_prog = ttk.Label(s1, text="", style="Nota.TLabel", wraplength=430)
         self.lbl_nota_prog.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        self._boton(s1, "Reporte horas a PM (PDF)", self._reporte_horas, "Naranja").grid(
+            row=6, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
         # ESTADO DE MANTENCIÓN
         s2 = self._seccion(p, "ESTADO DE MANTENCIÓN", "panel")
@@ -583,7 +599,7 @@ class App(tk.Tk):
         s7 = self._seccion(p, "KIT DE MANTENIMIENTO", "kit")
         s7.grid(row=3, column=1, rowspan=2, sticky="nsew", padx=4, pady=4)
         self.s7 = s7
-        self.lbl_kit = ttk.Label(s7, text="", font=("Segoe UI", 9, "bold"), foreground=AZUL, wraplength=640,
+        self.lbl_kit = ttk.Label(s7, text="", font=(tema.FUENTE, 9, "bold"), foreground=AZUL, wraplength=640,
                                  justify="left")
         self.lbl_kit.pack(anchor="w")
         m, self.tv_kit = tabla(s7, [("n", "N° de parte", 130, "w"), ("c", "Cantidad", 70, "center"),
@@ -1622,17 +1638,24 @@ class App(tk.Tk):
         ttk.Label(s3, text=f"Base de datos: {self.ruta_db}", style="Nota.TLabel").grid(row=0, column=0, columnspan=4,
                                                                                     sticky="w")
         self._boton(s3, "Respaldar base de datos", self._respaldar, "Verde").grid(row=1, column=0, pady=6, sticky="w")
-        self._boton(s3, "Crear acceso directo en el escritorio", self._acceso_directo).grid(
-            row=2, column=0, pady=6, sticky="w")
+        if ES_WINDOWS:
+            self._boton(s3, "Crear acceso directo en el escritorio", self._acceso_directo).grid(
+                row=2, column=0, pady=6, sticky="w")
+        if ES_MUESTRA:
+            self._boton(s3, "Restaurar datos de ejemplo", self._restaurar_demo, "Gris").grid(
+                row=2, column=0, pady=6, sticky="w")
         self._boton(s3, "Importar formatos de solicitud desde Excel", self._importar_formatos).grid(
             row=1, column=1, padx=6, sticky="w")
         self._boton(s3, "Importar datos desde Excel (.xlsm)", lambda: self._reimportar("excel"), "Rojo").grid(
             row=1, column=2, sticky="w")
         self._boton(s3, "Restaurar respaldo (.db)", lambda: self._reimportar("db"), "Rojo").grid(
             row=2, column=2, pady=6, sticky="w")
-        self._boton(s3, "Buscar actualizaciones", self._buscar_actualizacion, "Naranja").grid(
-            row=2, column=1, padx=6, pady=6, sticky="w")
-        ttk.Label(s3, text=f"Versión instalada: v{__version__}", style="Nota.TLabel").grid(
+        if ES_WINDOWS:
+            self._boton(s3, "Buscar actualizaciones", self._buscar_actualizacion, "Naranja").grid(
+                row=2, column=1, padx=6, pady=6, sticky="w")
+        ttk.Label(s3, text=f"Versión instalada: v{__version__}"
+                  + ("  ·  versión de muestra con datos ficticios (la versión real funciona en Windows)"
+                     if ES_MUESTRA else ""), style="Nota.TLabel").grid(
             row=3, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
     def _refrescar_config(self):
@@ -1742,14 +1765,38 @@ class App(tk.Tk):
                      f"Respaldo previo de los datos reemplazados:\n{resp}")
 
     # ------------------------------------------------------------ INSTRUCCIONES
+    def _restaurar_demo(self):
+        if not messagebox.askyesno(TITULO, "Se reemplazarán los datos actuales por la flota de ejemplo ficticia. "
+                                           "Antes se creará un respaldo automático. ¿Continuar?", icon="warning",
+                                   default=messagebox.NO, parent=self):
+            return
+        self.repo.cx.commit()
+        resp = self.ruta_db.with_name(f"{self.ruta_db.stem}_antes_de_demo_{dt.datetime.now():%Y%m%d_%H%M%S}.db")
+        destino = __import__("sqlite3").connect(str(resp))
+        with destino:
+            self.repo.cx.backup(destino)
+        destino.close()
+        from .demo import crear_demo
+        crear_demo(self.repo)
+        self.m.recargar()
+        self.cb_eq.configure(values=self.m.lista_equipos())
+        self.var_eq.set(self.m.lista_equipos()[0])
+        self.refrescar()
+        self.ui.info(f"Datos de ejemplo restaurados.\nRespaldo previo: {resp}")
+
     def _tab_instrucciones(self, tab):
         from .instrucciones import TEXTO
-        t = tk.Text(tab, wrap="word", font=("Segoe UI", 10), padx=12, pady=12, borderwidth=0)
+        t = tk.Text(tab, wrap="word", font=(tema.FUENTE, 10), padx=12, pady=12, borderwidth=0)
         sy = ttk.Scrollbar(tab, orient="vertical", command=t.yview)
         t.configure(yscrollcommand=sy.set)
         sy.pack(side="right", fill="y")
         t.pack(fill="both", expand=True)
-        t.tag_configure("h", font=("Segoe UI", 11, "bold"), foreground=AZUL, spacing1=10)
+        t.tag_configure("h", font=(tema.FUENTE, 11, "bold"), foreground=AZUL, spacing1=10)
+        if ES_MUESTRA:
+            t.insert("end", "Versión de muestra para Mac\n", ("h",))
+            t.insert("end", "Esta versión trae una flota de ejemplo con datos ficticios para mostrar el programa. "
+                            "La versión real funciona en Windows. La actualización automática y el acceso directo "
+                            "del escritorio están disponibles solo en Windows.\n\n")
         for linea in TEXTO.strip().splitlines():
             t.insert("end", linea.lstrip("#").strip() + "\n", ("h",) if linea.startswith("#") else ())
         t.configure(state="disabled")

@@ -24,7 +24,9 @@ AZUL = "#1F6FB2"
 MORADO = "#7B4FB0"
 GRIS = "#6B7785"
 
-FUENTE = "Segoe UI"
+import sys as _sys
+
+FUENTE = "Helvetica Neue" if _sys.platform == "darwin" else "Segoe UI"
 
 _cache: dict = {}
 

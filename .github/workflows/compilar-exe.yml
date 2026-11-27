@@ -58,3 +58,50 @@ jobs:
             Si ya tiene instalada una versión con actualización automática (v10.3 o posterior), no necesita descargar nada:
             el programa avisa en la barra lateral y se actualiza desde **Configuración > Buscar actualizaciones**.
             Sus datos se conservan (están en Documentos\PlanificacionPM).
+
+            **Mac (versión de muestra):** descargue **PlanificacionPM-Mac.zip**, descomprímalo y abra «Planificacion PM»
+            con **clic derecho > Abrir > Abrir** la primera vez (la app no está firmada por Apple). Trae datos de ejemplo
+            ficticios; la versión real funciona en Windows.
+
+  mac-muestra:
+    # Versión de muestra para Mac (datos de ejemplo ficticios). Se adjunta a la misma Release que el .exe.
+    needs: windows-exe
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Pruebas
+        run: python -m pytest -q tests
+
+      - name: Generar ícono
+        run: python -c "from planificacion_pm.tema import dibujar; dibujar('logo').save('icono.png')"
+
+      - name: Compilar Planificacion PM.app
+        run: pyinstaller --noconfirm --windowed --icon icono.png --hidden-import PIL._tkinter_finder --osx-bundle-identifier cl.planificacionpm.muestra --name "Planificacion PM" main.py
+
+      - name: Empaquetar
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Planificacion PM.app" PlanificacionPM-Mac.zip
+
+      - name: Publicar app (artefacto)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlanificacionPM-Mac
+          path: PlanificacionPM-Mac.zip
+          if-no-files-found: error
+
+      - name: Leer versión
+        id: ver
+        run: echo "v=$(python -c 'from planificacion_pm import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Adjuntar a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          files: PlanificacionPM-Mac.zip

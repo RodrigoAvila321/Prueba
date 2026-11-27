@@ -27,9 +27,10 @@ CICLO = 4.2     # segundos de un ciclo de perforación (bajar y subir)
 
 
 def _fuente(negrita: bool, tam: int):
-    nombres = (["segoeuib.ttf", "arialbd.ttf", "Inter-Bold.otf", "DejaVuSans-Bold.ttf"] if negrita
-               else ["segoeui.ttf", "arial.ttf", "Inter-Medium.otf", "DejaVuSans.ttf"])
-    rutas = ["", "/usr/share/fonts/opentype/inter/", "/usr/share/fonts/truetype/dejavu/"]
+    nombres = (["segoeuib.ttf", "arialbd.ttf", "Arial Bold.ttf", "Inter-Bold.otf", "DejaVuSans-Bold.ttf"] if negrita
+               else ["segoeui.ttf", "arial.ttf", "Arial.ttf", "Inter-Medium.otf", "DejaVuSans.ttf"])
+    rutas = ["", "/System/Library/Fonts/Supplemental/", "/Library/Fonts/", "/usr/share/fonts/opentype/inter/",
+             "/usr/share/fonts/truetype/dejavu/"]
     for n in nombres:
         for r in rutas:
             try:
