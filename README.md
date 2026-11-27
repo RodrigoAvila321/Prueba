@@ -37,7 +37,8 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
 
 ## Versión de muestra para Mac
 
-Cada versión publica también **`PlanificacionPM-Mac.zip`** en la misma Release (enlace permanente arriba).
+La muestra quedó **fija en la versión v11.0** (su compilación automática está desactivada en el workflow):
+https://github.com/RodrigoAvila321/Prueba/releases/download/v11.0/PlanificacionPM-Mac.zip
 Es una muestra para presentar el programa desde un Mac: trae una flota de ejemplo con **datos ficticios**
 (se crean al primer inicio, sin información real) y todas las funciones; la versión real es la de Windows.
 
