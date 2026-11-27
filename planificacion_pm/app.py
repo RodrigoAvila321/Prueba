@@ -107,24 +107,60 @@ class UITk:
 
 
 class App(tk.Tk):
-    def __init__(self, ruta_db: Path | None = None, hoy: dt.date | None = None):
+    def __init__(self, ruta_db: Path | None = None, hoy: dt.date | None = None, carga: bool = True):
         super().__init__()
+        self.withdraw()
         self.title(f"{TITULO} · Mantención preventiva de equipos de perforación (v{__version__})")
         self.geometry("1440x880")
         self.minsize(1000, 640)
         self._estilos()
+        self.splash = None
+        if carga:
+            try:
+                from .splash import PantallaCarga
+                self.splash = PantallaCarga(self)
+                self.splash.esperar(1.2)
+            except Exception:
+                self.splash = None
         self.ruta_db = ruta_db or carpeta_datos() / NOMBRE_DB
         self.repo = Repositorio(self.ruta_db)
         self.ui = UITk(self)
-        if self.repo.vacia() and not self._primer_inicio():
-            self.after(10, self.destroy)
-            return
+        if self.repo.vacia():
+            self._cerrar_carga(0)
+            if not self._primer_inicio():
+                self.after(10, self.destroy)
+                return
+        self._estado_carga("Calculando proyecciones")
         self.m = Motor(self.repo, hoy=hoy)
         self.acc = Acciones(self.m, self.ui)
         self.var_eq = tk.StringVar(value=self.repo.get_config("equipo_sel") or (self.m.lista_equipos() or [""])[0])
+        self._estado_carga("Preparando panel")
         self._construir()
         self.refrescar()
+        self._cerrar_carga(3.0)
+        self.deiconify()
+        self.lift()
         self.after(300, self._al_abrir)
+
+    # ------------------------------------------------------------ pantalla de carga
+    def _estado_carga(self, txt):
+        if self.splash:
+            self.splash.set_estado(txt)
+
+    def _latido(self):
+        if self.splash:
+            self.splash.paso()
+
+    def _cerrar_carga(self, minimo: float):
+        """Cierra la pantalla de carga cuando lleva al menos `minimo` segundos visible."""
+        if not self.splash:
+            return
+        falta = minimo - self.splash.transcurrido()
+        if falta > 0:
+            self.splash.set_estado("Listo")
+            self.splash.esperar(falta)
+        self.splash.cerrar()
+        self.splash = None
 
     # ------------------------------------------------------------------ estilo
     def _estilos(self):
@@ -376,6 +412,7 @@ class App(tk.Tk):
                "Kits PM": self._tab_kits_pm, "Lecturas y programación": self._tab_lecturas,
                "Configuración": self._tab_config, "Instrucciones": self._tab_instrucciones}
         for nombre, _ic, _et in self.PAGINAS:
+            self._latido()
             f = ttk.Frame(self.nb, style="Pagina.TFrame")
             self.nb.add(f, text=nombre)
             self.tabs[nombre] = f
@@ -1733,6 +1770,7 @@ class App(tk.Tk):
                            ("Aceites por semanas", self._refrescar_semanas), ("Kits a solicitar", self._refrescar_kits_sol),
                            ("Kits PM", self._refrescar_kits_pm), ("Lecturas", self._refrescar_lecturas),
                            ("Configuración", self._refrescar_config)):
+            self._latido()
             try:
                 fn()
             except Exception as ex:  # una sección con datos incoherentes no debe bloquear el resto

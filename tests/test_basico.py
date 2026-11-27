@@ -186,3 +186,12 @@ def test_exportar_pedido(tmp_path):
     fila = [c.value for c in ws[7] if c.value is not None]
     assert "P9" in [c.value for row in ws.iter_rows(min_row=7) for c in row]
     assert str(ws["A1"].value).startswith("PEDIDO DE ACEITES") and fila
+
+
+def test_pantalla_de_carga(tmp_path):
+    from planificacion_pm import splash
+    im = splash.cuadro(1.0, "Cargando datos")
+    assert im.size == (splash.W, splash.H)
+    assert splash.cuadro(0.5).tobytes() != splash.cuadro(1.5).tobytes()   # la perforadora se mueve
+    splash.guardar_png(str(tmp_path / "s.png"))
+    assert (tmp_path / "s.png").stat().st_size > 5000

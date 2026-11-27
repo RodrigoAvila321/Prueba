@@ -24,11 +24,13 @@ jobs:
       - name: Pruebas
         run: python -m pytest -q tests
 
-      - name: Generar ícono
-        run: python -c "from planificacion_pm.tema import guardar_ico; guardar_ico('icono.ico')"
+      - name: Generar ícono e imagen de inicio
+        run: |
+          python -c "from planificacion_pm.tema import guardar_ico; guardar_ico('icono.ico')"
+          python -c "from planificacion_pm.splash import guardar_png; guardar_png('splash.png')"
 
       - name: Compilar PlanificacionPM.exe
-        run: pyinstaller --noconfirm --onefile --windowed --icon icono.ico --name PlanificacionPM main.py
+        run: pyinstaller --noconfirm --onefile --windowed --icon icono.ico --splash splash.png --hidden-import PIL._tkinter_finder --name PlanificacionPM main.py
 
       - name: Publicar ejecutable (artefacto)
         uses: actions/upload-artifact@v4

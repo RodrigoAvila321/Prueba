@@ -8,6 +8,8 @@ TEXTO = """
 4. Cada vez que se abre, el programa solicita el horómetro de hoy del equipo seleccionado, mostrando la última PM y la última lectura como referencia. Si se cancela, el Panel muestra una alerta roja «Horómetro no actualizado hoy».
 5. Al cambiar de equipo, el Panel muestra la última lectura de ese equipo. Para actualizarla use «Actualizar horómetro». Las lecturas quedan en la pestaña «Lecturas y programación».
 
+6. Al abrir aparece la pantalla de carga «Programación PM perforadoras · Por Rodrigo Avila» con una perforadora animada mientras se cargan los datos.
+
 # B. Equipos y modelos
 1. D10 y D11 son DI650i: ciclo 250 → 500 → 250 → 1000 → 250 → 1500, con 7 aceites.
 2. D14, D15 y D16 son DR412i: ciclo 250 → 500 → 250 → 1000 → 250 → 500 → 250 → 2000, con 13 aceites.
