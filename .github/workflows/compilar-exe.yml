@@ -59,9 +59,11 @@ jobs:
             el programa avisa en la barra lateral y se actualiza desde **Configuración > Buscar actualizaciones**.
             Sus datos se conservan (están en Documentos\PlanificacionPM).
 
-            **Mac (versión de muestra):** descargue **PlanificacionPM-Mac.zip**, descomprímalo y abra «Planificacion PM»
-            con **clic derecho > Abrir > Abrir** la primera vez (la app no está firmada por Apple). Trae datos de ejemplo
-            ficticios; la versión real funciona en Windows.
+            **Mac (versión de muestra):** descargue **PlanificacionPM-Mac.zip** y descomprímalo. La app no está firmada por
+            Apple: la primera vez macOS mostrará «No se abrió…». Pulse **Listo**, vaya a **Ajustes del Sistema >
+            Privacidad y seguridad**, pulse **Abrir igualmente** junto a «Planificacion PM.app» y confirme. Alternativa en
+            Terminal: `xattr -dr com.apple.quarantine "Planificacion PM.app"`. Trae datos de ejemplo ficticios; la versión
+            real funciona en Windows.
 
   mac-muestra:
     # Versión de muestra para Mac (datos de ejemplo ficticios). Se adjunta a la misma Release que el .exe.

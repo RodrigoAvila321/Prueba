@@ -42,7 +42,10 @@ Es una muestra para presentar el programa desde un Mac: trae una flota de ejempl
 (se crean al primer inicio, sin información real) y todas las funciones; la versión real es la de Windows.
 
 1. Descargue `PlanificacionPM-Mac.zip` y descomprímalo (doble clic).
-2. La primera vez abra «Planificacion PM» con **clic derecho > Abrir > Abrir** (la app no está firmada por Apple).
+2. La app no está firmada por Apple, así que la primera vez macOS muestra «No se abrió "Planificacion PM.app"».
+   Pulse **Listo**, abra **Ajustes del Sistema > Privacidad y seguridad**, pulse **Abrir igualmente** junto al
+   mensaje de la app y confirme con su contraseña. Alternativa en Terminal:
+   `xattr -dr com.apple.quarantine ~/Downloads/"Planificacion PM.app"`.
 3. Los datos de la muestra quedan en `Documentos/PlanificacionPM`; **Configuración > Restaurar datos de ejemplo**
    los vuelve al estado inicial. También se puede importar un `.xlsm` o un respaldo `.db`.
 
